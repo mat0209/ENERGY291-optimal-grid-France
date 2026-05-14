@@ -1,5 +1,3 @@
-# ENERGY291-optimal-grid-France
-
 # Optimal Siting and Sizing of Solar, Wind, and Battery Storage to Compensate for Nuclear Decommissioning in France
 
 **Matthieu Hautsch, Anna-Sherazade Sylla**  
@@ -11,7 +9,7 @@ ENERGY 291 Project
 
 Nuclear power currently represents **67.1% of French electricity (2024)**, with a fleet of 57 reactors totaling **62.9 GW**. This strong reliance is unique in Europe but the fleet is aging, with most reactors approaching or exceeding their original 40-year design lifetime.
 
-Under a strict retirement scenario, France could lose approximately **18 GW of nuclear capacity by 2040**, raising the question of how to replace this baseload generation while maintaining reliability and low carbon intensity.
+Under a strict retirement scenario, France could lose approximately **10 GW of nuclear capacity by 2030**, raising the question of how to replace this baseload generation while maintaining reliability and low carbon intensity.
 
 ---
 
