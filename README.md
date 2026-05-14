@@ -37,7 +37,7 @@ The model uses hourly demand and generation data, representative day clustering,
 - Reference year: 2024  
 - No imports/exports (isolated grid)  
 - No new nuclear except Flamanville 3  
-- 40–50 year nuclear lifetime assumption  
+- 50 year nuclear lifetime assumption  
 - 4-hour battery storage model  
 - Utility-scale solar only  
 - Simplified transmission network  
