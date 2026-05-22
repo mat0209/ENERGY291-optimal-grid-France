@@ -1,9 +1,10 @@
-using JuMP, Clp, CSV, DataFrames, Printf, Dates
+using JuMP, Clp, CSV, DataFrames, Printf, Dates, Plots
 
 # =============================================================================
 # Paths
 # =============================================================================
 const DATA = joinpath(@__DIR__, "..", "..", "data", "processed")
+const DATA_results = joinpath(@__DIR__, "..", "..", "data", "results")
 
 # =============================================================================
 # Load data
@@ -95,7 +96,7 @@ set_silent(model)
 for r in 1:R, d in 1:D
 
     # (4) Battery initialisation: each representative day starts at 50% SoC
-    @constraint(model, e[r, d, 0] == 0.0 * x_bat[r])
+    @constraint(model, e[r, d, 0] == 0.5 * x_bat[r])
 
     for t in 1:T
 
@@ -157,3 +158,43 @@ println("-" ^ 70)
     sum(value(x_solar[r]) for r in 1:R),
     sum(value(x_wind[r])  for r in 1:R),
     sum(value(x_bat[r])   for r in 1:R))
+
+# --- Plot capacity results par région (stacked bar chart) ---
+fig_dir = joinpath(@__DIR__, "..", "..", "figures", "results")
+mkpath(fig_dir)
+regions_plot = collect(regions)
+solar_vals = [value(x_solar[r]) for r in 1:R]
+wind_vals  = [value(x_wind[r])  for r in 1:R]
+bat_vals   = [value(x_bat[r])   for r in 1:R]
+
+bar(regions_plot, solar_vals,
+    label = "Solar (MW)",
+    bar_width = 0.7,
+    color = "#f28e2b",
+    xlabel = "Region",
+    ylabel = "Capacity Added (MW / MWh)",
+    title = "Optimal Capacity Expansion by Region",
+    legend = :topright,
+    xrotation = 45)
+bar!(regions_plot, wind_vals,
+    label = "Wind (MW)",
+    color = "#59a14f",
+    bottom = solar_vals)
+bar!(regions_plot, bat_vals,
+    label = "Battery (MWh)",
+    color = "#7b5ea6",
+    bottom = solar_vals .+ wind_vals)
+
+output_path = joinpath(fig_dir, "capacity_results_unlimited_transmission.png")
+savefig(output_path)
+println("Saved plot to ", output_path)
+
+# --- Save results to CSV ---
+results = DataFrame(
+    Région = regions,
+    Solar_MW = [value(x_solar[r]) for r in 1:R],
+    Wind_MW = [value(x_wind[r]) for r in 1:R],
+    Battery_MWh = [value(x_bat[r]) for r in 1:R],
+)
+CSV.write(joinpath(DATA_results, "capacity_results_unlimited_transmission.csv"), results; delim=';')
+println("Saved results to ", joinpath(DATA_results, "capacity_results_unlimited_transmission.csv"))
