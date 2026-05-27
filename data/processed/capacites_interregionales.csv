@@ -1,0 +1,29 @@
+Region_A,Code_A,Region_B,Code_B,Capacite_MW_total,Nb_troncons,Capacite_400kV,Capacite_225kV
+Hauts-de-France,32,Île-de-France,11,62100,92,36000,26100
+Normandie,28,Île-de-France,11,45500,99,12000,33500
+Occitanie,76,Provence-Alpes-Côte d'Azur,93,45400,43,39000,6400
+Auvergne-Rhône-Alpes,84,Bourgogne-Franche-Comté,27,35500,52,21000,14500
+Auvergne-Rhône-Alpes,84,Occitanie,76,34300,46,22500,11800
+Centre-Val de Loire,24,Île-de-France,11,33800,40,25500,8300
+Bretagne,53,Pays de la Loire,52,26300,31,19500,6800
+Nouvelle-Aquitaine,75,Occitanie,76,25900,42,13500,12400
+Auvergne-Rhône-Alpes,84,Provence-Alpes-Côte d'Azur,93,24800,41,12000,12800
+Centre-Val de Loire,24,Pays de la Loire,52,22900,19,21000,1900
+Bretagne,53,Centre-Val de Loire,24,19500,13,19500,0
+Auvergne-Rhône-Alpes,84,Nouvelle-Aquitaine,75,18300,35,6000,12300
+Bourgogne-Franche-Comté,27,Grand Est,44,18100,29,9000,9100
+Bourgogne-Franche-Comté,27,Provence-Alpes-Côte d'Azur,93,16500,23,10500,6000
+Centre-Val de Loire,24,Nouvelle-Aquitaine,75,16400,28,7500,8900
+Grand Est,44,Hauts-de-France,32,14900,21,9000,5900
+Auvergne-Rhône-Alpes,84,Centre-Val de Loire,24,14700,12,13500,1200
+Hauts-de-France,32,Normandie,28,14300,11,13500,800
+Provence-Alpes-Côte d'Azur,93,Île-de-France,11,11500,22,4500,7000
+Grand Est,44,Île-de-France,11,10100,15,6000,4100
+Bourgogne-Franche-Comté,27,Centre-Val de Loire,24,9100,18,3000,6100
+Normandie,28,Pays de la Loire,52,8800,11,6000,2800
+Grand Est,44,Normandie,28,7200,7,6000,1200
+Bretagne,53,Normandie,28,6800,6,6000,800
+Centre-Val de Loire,24,Grand Est,44,6300,5,6000,300
+Auvergne-Rhône-Alpes,84,Pays de la Loire,52,6000,4,6000,0
+Bourgogne-Franche-Comté,27,Île-de-France,11,3400,9,0,3400
+Nouvelle-Aquitaine,75,Pays de la Loire,52,1200,3,0,1200
