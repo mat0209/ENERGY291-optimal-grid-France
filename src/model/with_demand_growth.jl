@@ -15,6 +15,7 @@ pv_df   = CSV.read(joinpath(DATA, "ninja_pv_representative_days_2024_regions.csv
                    DataFrame)
 wind_df = CSV.read(joinpath(DATA, "ninja_wind_representative_days_2024_regions.csv"),
                    DataFrame)
+cap_df  = CSV.read(joinpath(DATA, "capacites_interregionales.csv"), DataFrame)
 
 # =============================================================================
 # Sets
@@ -28,6 +29,18 @@ T = 24                # hours per day
 
 region_idx = Dict(r => i for (i, r) in enumerate(regions))
 date_idx   = Dict(d => i for (i, d) in enumerate(dates))
+
+# Capacités interrégionales : (rA, rB) => cap_MW  (une seule direction par paire du CSV)
+cap = Dict(
+    (region_idx[row.Region_A], region_idx[row.Region_B]) => Float64(row.Capacite_MW_total)
+    for row in eachrow(cap_df)
+    if haskey(region_idx, row.Region_A) && haskey(region_idx, row.Region_B)
+)
+pairs = collect(keys(cap))
+
+# Pour chaque région : paires dont elle est l'extrémité import (in) ou export (out)
+pairs_in  = [[(rA,rB) for (rA,rB) in pairs if rB == r] for r in 1:R]
+pairs_out = [[(rA,rB) for (rA,rB) in pairs if rA == r] for r in 1:R]
 
 # =============================================================================
 # Parameters — arrays indexed [r, d, t], t ∈ 1:24
@@ -45,6 +58,8 @@ for row in eachrow(gen_df)
     demand[r, d, t]      = coalesce(row[Symbol("Consommation (MW)")], 0.0)
     gen_reduced[r, d, t] = coalesce(row.gen_reduced_MW, 0.0)
 end
+
+demand .*= 1.08   # scénario +8% de consommation
 
 # --- Capacity factors (Ninja timestamps are UTC, matched by date and UTC hour) ---
 for i in 1:nrow(pv_df)
@@ -82,7 +97,7 @@ set_silent(model)
 @variable(model, b_charge[1:R, 1:D, 1:T]    >= 0) # battery charging      [MW]
 @variable(model, b_discharge[1:R, 1:D, 1:T] >= 0) # battery discharging   [MW]
 @variable(model, e[1:R, 1:D, 0:T]           >= 0) # state of charge       [MWh]
-@variable(model, flow[1:R, 1:D, 1:T])             # net import per region [MW], free (no limit)
+@variable(model, flow[pairs, 1:D, 1:T])            # flow (rA→rB) > 0 = export de rA vers rB [MW]
 
 # --- Objective: minimise total annualised investment cost ---
 @objective(model, Min,
@@ -95,19 +110,20 @@ set_silent(model)
 # --- Constraints ---
 for r in 1:R, d in 1:D
 
-    # (4) Battery initialisation: each representative day starts at 50% SoC
-    @constraint(model, e[r, d, 0] == 0.5 * x_bat[r])
+    # (4) Battery initialisation cyclique : début du jour d = fin du jour précédent (mod D)
+    @constraint(model, e[r, d, 0] == e[r, d == 1 ? D : d-1, T])
 
     for t in 1:T
 
-        # (1) Energy balance with net import flow (no transmission limit)
+        # (1) Energy balance avec flux bilatéraux
         @constraint(model,
             gen_reduced[r, d, t]
             + cf_solar[r, d, t] * x_solar[r]
             + cf_wind[r, d, t]  * x_wind[r]
             + b_discharge[r, d, t]
             - b_charge[r, d, t]
-            + flow[r, d, t]
+            + sum(flow[p, d, t] for p in pairs_in[r];  init=AffExpr(0))
+            - sum(flow[p, d, t] for p in pairs_out[r]; init=AffExpr(0))
             >= demand[r, d, t]
         )
 
@@ -125,9 +141,9 @@ for r in 1:R, d in 1:D
     end
 end
 
-# Flow conservation: net imports sum to zero across all regions at each (d,t)
-for d in 1:D, t in 1:T
-    @constraint(model, sum(flow[r, d, t] for r in 1:R) == 0)
+# (2) Capacités de transmission interrégionales
+for (rA, rB) in pairs, d in 1:D, t in 1:T
+    @constraint(model, -cap[(rA,rB)] <= flow[(rA,rB), d, t] <= cap[(rA,rB)])
 end
 
 
@@ -139,7 +155,7 @@ optimize!(model)
 # =============================================================================
 # Results
 # =============================================================================
-println("\n=== Optimal Capacity Expansion — With Unlimited Transmission ===")
+println("\n=== Optimal Capacity Expansion — With Limited Transmission + 8% Demand Growth ===")
 println("Status    : ", termination_status(model))
 println("Objective : ", round(objective_value(model) / 1e6, digits=1), " M€/yr")
 println()
@@ -163,16 +179,16 @@ println("-" ^ 70)
 fig_dir = joinpath(@__DIR__, "..", "..", "figures", "results")
 mkpath(fig_dir)
 regions_plot = collect(regions)
-solar_vals = [value(x_solar[r]) for r in 1:R]
-wind_vals  = [value(x_wind[r])  for r in 1:R]
-bat_vals   = [value(x_bat[r])   for r in 1:R]
+solar_vals = [value(x_solar[r])        for r in 1:R]
+wind_vals  = [value(x_wind[r])         for r in 1:R]
+bat_vals   = [value(x_bat[r]) / 4.0   for r in 1:R]   # MWh → MW (4h battery)
 
 bar(regions_plot, solar_vals,
     label = "Solar (MW)",
     bar_width = 0.7,
     color = "#f28e2b",
     xlabel = "Region",
-    ylabel = "Capacity Added (MW / MWh)",
+    ylabel = "Capacity Added (MW)",
     title = "Optimal Capacity Expansion by Region",
     legend = :topright,
     xrotation = 45)
@@ -181,11 +197,11 @@ bar!(regions_plot, wind_vals,
     color = "#59a14f",
     bottom = solar_vals)
 bar!(regions_plot, bat_vals,
-    label = "Battery (MWh)",
+    label = "Battery (MW)",
     color = "#7b5ea6",
     bottom = solar_vals .+ wind_vals)
 
-output_path = joinpath(fig_dir, "capacity_results_unlimited_transmission.png")
+output_path = joinpath(fig_dir, "capacity_results_demand_growth_8pct.png")
 savefig(output_path)
 println("Saved plot to ", output_path)
 
@@ -196,5 +212,5 @@ results = DataFrame(
     Wind_MW = [value(x_wind[r]) for r in 1:R],
     Battery_MWh = [value(x_bat[r]) for r in 1:R],
 )
-CSV.write(joinpath(DATA_results, "capacity_results_unlimited_transmission.csv"), results; delim=';')
-println("Saved results to ", joinpath(DATA_results, "capacity_results_unlimited_transmission.csv"))
+CSV.write(joinpath(DATA_results, "capacity_results_demand_growth_8pct.csv"), results; delim=';')
+println("Saved results to ", joinpath(DATA_results, "capacity_results_demand_growth_8pct.csv"))
