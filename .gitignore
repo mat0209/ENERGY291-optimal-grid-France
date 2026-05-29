@@ -222,3 +222,10 @@ __pycache__/
 *.pyc
 .env
 .ipynb_checkpoints/
+
+# Large raw data files (too big for GitHub)
+data/raw/eco2mix-regional-cons-def.csv
+data/raw/ninja-wind-country-FR-current_onshore-merra2.csv
+data/raw/ninja-pv-country-FR-nuts2-merra2.csv
+.DS_Store
+data/.DS_Store
