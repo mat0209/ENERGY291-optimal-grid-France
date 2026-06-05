@@ -71,6 +71,74 @@ Inter-regional distance — tortuosity factor
    estimation. Distance_km_adjusted is the recommended input for any cost
    calculations involving line length (e.g., investment cost per km).
 
+Inter-regional transmission capacity — kV to MW conversion
+   The ODRE dataset records each line by voltage class (400kV or 225kV) and type
+   (overhead / underground) but does not include per-circuit power ratings.
+   Thermal capacity in MW is assigned per circuit using the standard conductor
+   parameters from the PyPSA-Eur line-type library (docs.pypsa.org/components/
+   line-types), which follow ENTSO-E transmission standards:
+
+     Voltage  Type         Conductor type              i_nom    S_nom (calc.)   Used
+     ───────  ──────────   ─────────────────────────   ──────   ─────────────   ──────
+     400 kV   Overhead     Al/St 240/40 4-bundle       2.58 kA  √3×400×2.58     1500 MW
+                                                                ≈ 1787 MVA
+     400 kV   Underground  —                            —       derated ~33 %   1000 MW
+     225 kV   Overhead     Al/St 240/40 2-bundle       1.29 kA  √3×225×1.29     400 MW
+                                                                ≈ 502 MVA
+     225 kV   Underground  —                            —       derated ~40 %   300 MW
+
+   The overhead MW values are the apparent power S_nom converted to active power
+   at a typical operational power factor (~0.85 for 400 kV, ~0.80 for 225 kV),
+   then rounded to the nearest 100 MW — consistent with the capacity assumptions
+   used in PyPSA-Eur (Horsch et al., 2018) and corroborated by published data on
+   specific French 400 kV circuits (e.g., Avelin–Gavrelle: 1500 MW per circuit).
+   Underground cables are derated relative to overhead lines of the same voltage
+   because buried cables dissipate heat less efficiently; the ~30–40 % reduction
+   applied here is in line with standard practice in European grid-expansion studies
+   (see e.g. Fürsch et al., 2013, Applied Energy 104, 642–652).
+
+   Reference:
+     Horsch J., Hofmann F., Schlachtberger D., Brown T. (2018).
+     "PyPSA-Eur: An Open Optimisation Model of the European Transmission System."
+     Energy Strategy Reviews, 22, 207–215.
+     https://doi.org/10.1016/j.esr.2018.10.002
+   Line-type table: https://docs.pypsa.org/v1.0.5/user-guide/components/line-types/
+
+New overhead transmission line investment costs
+   Only overhead (aerial) lines are considered for new construction. The RTE
+   Schéma Décennal de Développement du Réseau (SDDR 2025, Fiche 13) confirms
+   that underground AC cables at 400 kV are not a viable option in France (they
+   would require HVDC conversion, adding 40–70 Md€), and that underground 225 kV
+   cables cost on average 65 % more than overhead lines of comparable capacity —
+   making overhead lines the economically preferred option for new transmission 
+   corridors.
+
+   Investment costs used in the model (overhead lines only):
+
+     Voltage   Cost              Source
+     ───────   ───────────────   ───────────────────────────────────────────────
+     400 kV    750 EUR/MW/km     Danish Energy Agency, Technology Data for
+                                 Energy Transport (July 2025), via PyPSA/
+                                 technology-data (costs_2030.csv, HVAC overhead)
+     225 kV    1 250 EUR/MW/km   Derived from RTE SDDR 2025, Fiche 13: the
+                                 Sarry–Vielmoulin 225 kV rehabilitation (60 km
+                                 aerial, ~30 M€) implies ~0.5 M€/km, i.e.
+                                 ~1 250 EUR/MW/km at 400 MW capacity. New-build
+                                 costs are consistent with this order of
+                                 magnitude; no single-figure unit cost for new
+                                 construction is published by RTE.
+
+   Investment cost for a new corridor (i, j) is computed as:
+     C_ij = cap_MW × Distance_km_adjusted × cost_EUR_per_MW_per_km
+   where Distance_km_adjusted already incorporates the 1.25 tortuosity factor.
+
+   References:
+     Danish Energy Agency (2025). Technology Data for Energy Transport.
+       https://github.com/PyPSA/technology-data (costs_2030.csv)
+     RTE (2025). Schéma Décennal de Développement du Réseau — Fiche 13 :
+       Choix technologiques.
+       https://assets.rte-france.com/prod/public/2025-03/2025-03-21-sddr-fiche-13-choix-technologiques.pdf
+
 K-medoids clustering — representative days
    10 representative days are selected from 2024 using k-medoids (PAM) on the
    full year without monthly constraint. The distance metric is a weighted
