@@ -3,8 +3,8 @@ import unicodedata
 import re
 
 COMMUNES_PATH    = "data/raw/communes-france-2025.csv"
-TRANSMISSION_IN  = "data/processed/lignes_transmission.csv"
-TRANSMISSION_OUT = "data/processed/lignes_transmission.csv"
+TRANSMISSION_IN  = "data/final/lignes_transmission.csv"
+TRANSMISSION_OUT = "data/final/lignes_transmission.csv"
 
 
 # ── 1. Normalisation ──────────────────────────────────────────────────────────
