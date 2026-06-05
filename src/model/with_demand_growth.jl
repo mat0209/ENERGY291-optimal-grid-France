@@ -59,7 +59,7 @@ for row in eachrow(gen_df)
     gen_reduced[r, d, t] = coalesce(row.gen_reduced_MW, 0.0)
 end
 
-demand .*= 2  # scénario +8% de consommation
+demand .*= 1.08  # scénario +8% de consommation
 
 # --- Capacity factors (Ninja timestamps are UTC, matched by date and UTC hour) ---
 for i in 1:nrow(pv_df)
