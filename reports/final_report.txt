@@ -1,0 +1,84 @@
+================================================================================
+ENERGY 291 — Optimal Siting and Sizing of Solar, Wind, and Battery Storage
+to Compensate for Nuclear Decommissioning in France
+Matthieu Hautsch, Anna-Sherazade Sylla
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+DATA SOURCES
+────────────────────────────────────────────────────────────────────────────────
+
+1. RTE Eco2Mix — Load & generation mix (2024)
+   Source  : https://www.rte-france.com/eco2mix
+   File    : data/raw/mix_rte_2024.csv
+   Used for: Half-hourly national demand and production by technology (nuclear,
+             wind, solar, hydro, gas, etc.) for 2024. Cleaned and resampled to
+             30-min resolution in src/data/rte_cleaning.py. Used as input to the
+             k-medoids clustering (src/clustering/kmedoids_2.py) to select 10
+             representative days for the optimization model.
+
+2. ODRE — RTE aerial and underground transmission lines
+   Source  : https://odre.opendatasoft.com
+   Files   : data/raw/lignes-aeriennes-rte-nv.csv
+             data/raw/lignes-souterraines-rte-nv.csv
+   Used for: Deriving the inter-regional transmission network. Each line is
+             assigned to a pair of mainland French regions (src/data/transmission.py,
+             src/data/regions.py). Aggregated into total inter-regional capacity
+             (MW) and number of corridors per region pair
+             (data/final/capacites_interregionales.csv).
+
+3. Renewables.ninja — Capacity factors for solar PV and onshore wind (2024)
+   Source  : https://www.renewables.ninja
+   Files   : data/raw/ninja_pv_representative_days_2024.csv
+             data/raw/ninja_wind_representative_days_2024.csv
+   Used for: Hourly capacity factors by region for the 10 representative days,
+             used as input to the optimization model to size solar and wind
+             capacity.
+
+4. IAEA PRIS — Nuclear power plant fleet
+   Source  : https://pris.iaea.org
+   File    : data/processed/production_nucleaire.csv
+   Used for: Unit-level data on French nuclear reactors (capacity, first
+             criticality date). Used to identify plants retiring under a 50-year
+             lifetime assumption and to compute the nuclear capacity loss scenario
+             by 2030.
+
+5. IGN / data.gouv.fr — French communes with region codes and centroids
+   Source  : https://www.data.gouv.fr
+   File    : data/raw/communes-france-2025.csv
+   Used for: Computing region-level geographic centroids (mean lat/lon of
+             communes) used in map visualizations and for computing inter-regional
+             straight-line distances.
+
+────────────────────────────────────────────────────────────────────────────────
+METHODOLOGICAL NOTES
+────────────────────────────────────────────────────────────────────────────────
+
+Inter-regional distance — tortuosity factor
+   The column Distance_km in capacites_interregionales.csv is the Haversine
+   (great-circle) distance between region centroids. The column
+   Distance_km_adjusted applies a tortuosity factor of 1.25 to account for the
+   fact that real transmission lines cannot follow straight-line routes (terrain,
+   urban areas, existing right-of-way constraints).
+
+   The factor 1.25 is taken from:
+     - Hagspiel S. et al. (2014). "Cost-optimal power system extension under
+       flow-based market coupling." Energy, 66, 654–666.
+     - Fürsch M. et al. (2013). "The role of grid extensions in a cost-optimal
+       transformation of the European electricity system until 2050."
+       Applied Energy, 104, 642–652.
+   Both studies use a detour factor of 1.25 for European transmission line cost
+   estimation. Distance_km_adjusted is the recommended input for any cost
+   calculations involving line length (e.g., investment cost per km).
+
+K-medoids clustering — representative days
+   10 representative days are selected from 2024 using k-medoids (PAM) on the
+   full year without monthly constraint. The distance metric is a weighted
+   Euclidean distance: 50% on demand profile, 50% on generation mix profiles
+   (weighted proportionally to each technology's average share). Each
+   representative day carries a weight equal to its cluster size / 366, used
+   as a time-weight in the optimization objective.
+   Source: src/clustering/kmedoids_2.py
+   Output: data/final/new_representative_days.csv
+           data/final/new_representative_day_profiles.csv
+           data/final/day_cluster_assignment.csv
