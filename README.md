@@ -57,11 +57,13 @@ The model uses hourly demand and generation data, representative day clustering,
 ## Structure
 
 
-src/ → models and optimization
-data/ → datasets
-notebooks/ → analysis
-results/ → outputs
-docs/ → reports
+src/         → scripts (data processing, clustering, optimization)
+data/raw/    → raw input data (RTE, IAEA, ODRE, renewables.ninja)
+data/processed/ → intermediate outputs
+data/final/  → production-ready inputs for the optimization model
+notebooks/   → analysis and exploration
+results/     → optimization outputs
+docs/        → reports
 
 
 ---

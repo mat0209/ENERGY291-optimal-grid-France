@@ -3,7 +3,7 @@ import re
 
 RAW_AERIEN     = "data/raw/lignes-aeriennes-rte-nv.csv"
 RAW_SOUTERRAIN = "data/raw/lignes-souterraines-rte-nv.csv"
-OUT_PATH       = "data/processed/lignes_transmission.csv"
+OUT_PATH       = "data/final/lignes_transmission.csv"
 
 
 # ── 1. Load and clean both raw CSVs ──────────────────────────────────────────

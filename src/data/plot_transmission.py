@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import os
 
-CORRIDORS_PATH = "data/processed/capacites_interregionales.csv"
+CORRIDORS_PATH = "data/final/capacites_interregionales.csv"
 COMMUNES_PATH  = "data/raw/communes-france-2025.csv"
 OUTPUT_HTML    = "figures/transmission/transmission_network.html"
 OUTPUT_PNG     = "figures/transmission/transmission_network.png"
