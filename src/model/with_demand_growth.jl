@@ -1,4 +1,4 @@
-using JuMP, Clp, CSV, DataFrames, Printf, Dates, Plots
+using JuMP, CSV, DataFrames, Printf, Dates, Plots, Clp
 
 # =============================================================================
 # Paths
@@ -59,7 +59,7 @@ for row in eachrow(gen_df)
     gen_reduced[r, d, t] = coalesce(row.gen_reduced_MW, 0.0)
 end
 
-demand .*= 1.08   # scénario +8% de consommation
+demand .*= 2  # scénario +8% de consommation
 
 # --- Capacity factors (Ninja timestamps are UTC, matched by date and UTC hour) ---
 for i in 1:nrow(pv_df)
@@ -81,7 +81,35 @@ end
 # =============================================================================
 c_solar = 84207.18832   # €/MW/yr   — onshore solar PV  (annualised CAPEX)
 c_wind  = 170873.2996   # €/MW/yr   — onshore wind       (annualised CAPEX)
-c_bat   = 23522.78488   # €/MWh/yr  — 4-hour Li-ion battery (energy capacity)
+c_bat   = 25529.34076  # €/MWh/yr  — 4-hour Li-ion battery (energy capacity)
+
+println("Vérification gen_reduced vs demand :")
+for d in 1:D
+    gen_tot = sum(gen_reduced[r, d, t] for r in 1:R, t in 1:T)
+    dem_tot = sum(demand[r, d, t]      for r in 1:R, t in 1:T)
+    @printf("Jour %2d : gen_reduced=%.0f MWh  demand=%.0f MWh  ratio=%.2f\n",
+            d, gen_tot, dem_tot, gen_tot/dem_tot)
+end
+
+
+println("\nConnectivité des régions :")
+for r in 1:R
+    max_in  = sum(cap[p] for p in pairs_in[r];  init=0.0)
+    max_out = sum(cap[p] for p in pairs_out[r]; init=0.0)
+    @printf("%-35s  import_max=%7.0f MW  export_max=%7.0f MW\n",
+            regions[r], max_in, max_out)
+end
+
+println("\nHeure la plus critique par région :")
+for r in 1:R
+    max_in = sum(cap[p] for p in pairs_in[r]; init=0.0)
+    worst = minimum(gen_reduced[r,d,t] + max_in
+                    for d in 1:D, t in 1:T)
+    worst_demand = maximum(demand[r,d,t] for d in 1:D, t in 1:T)
+    @printf("%-35s  offre_min=%.0f MW  demande_max=%.0f MW\n",
+            regions[r], worst, worst_demand)
+end
+
 
 # =============================================================================
 # Model
@@ -110,8 +138,8 @@ set_silent(model)
 # --- Constraints ---
 for r in 1:R, d in 1:D
 
-    # (4) Battery initialisation cyclique : début du jour d = fin du jour précédent (mod D)
-    @constraint(model, e[r, d, 0] == e[r, d == 1 ? D : d-1, T])
+    # (4) Battery à 50% au début et à la fin de chaque journée
+    @constraint(model, e[r, d, 0] == 0.5 * x_bat[r])
 
     for t in 1:T
 
