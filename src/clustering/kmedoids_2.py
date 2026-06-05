@@ -102,18 +102,19 @@ MONTH_NAMES = ["January","February","March","April","May","June",
                "July","August","September","October","November","December"]
 
 results = []
-for cluster_id, med_idx in enumerate(medoid_indices, start=1):
-    members      = np.where(cluster_assignments == (cluster_id - 1))[0]
+for orig_idx, med_idx in enumerate(medoid_indices):   # orig_idx: 0-based, matches cluster_assignments
+    members      = np.where(cluster_assignments == orig_idx)[0]
     cluster_size = len(members)
-    weight       = cluster_size / n_days   # fraction of the year
+    weight       = cluster_size / n_days
 
     row     = daily_profiles.iloc[med_idx]
-    raw_mat = profile_3d[med_idx]          # (48, n_cols)
+    raw_mat = profile_3d[med_idx]
     conso   = raw_mat[:, 0]
     month   = row["month"]
 
     results.append({
-        "cluster_id":          cluster_id,
+        "orig_idx":            orig_idx,              # keep to rebuild lookup after sort
+        "cluster_id":          orig_idx + 1,          # temporary, overwritten below
         "representative_date": str(row["date_only"]),
         "month":               month,
         "month_name":          MONTH_NAMES[int(month) - 1],
@@ -124,7 +125,7 @@ for cluster_id, med_idx in enumerate(medoid_indices, start=1):
         "max_consumption_MW":  round(float(conso.max()),  1),
     })
 
-# Sort chronologically by representative date
+# Sort chronologically and renumber — orig_idx is kept to allow correct day assignment later
 results.sort(key=lambda r: r["representative_date"])
 for i, r in enumerate(results, start=1):
     r["cluster_id"] = i
@@ -164,18 +165,17 @@ df_rep.to_csv(profiles_path, index=False)
 print(f"Detailed profiles exported to: {profiles_path}")
 
 # ── 10. Assign Every Day of the Year to Its Representative ────────────────────
-# Build a lookup: cluster_id (1-based) → dict with representative_date and weight
-cluster_lookup = {r["cluster_id"]: r for r in results}
+# Lookup by ORIGINAL 0-based index (matches cluster_assignments values directly)
+orig_lookup = {r["orig_idx"]: r for r in results}
 
 # Output A — mapping CSV (366 rows)
 mapping_rows = []
 for i, row in daily_profiles.iterrows():
-    assignment   = int(cluster_assignments[i])   # 0-based cluster index
-    cluster_id   = assignment + 1                # 1-based
-    rep          = cluster_lookup[cluster_id]
+    orig_idx = int(cluster_assignments[i])   # 0-based, original k-medoids order
+    rep      = orig_lookup[orig_idx]
     mapping_rows.append({
         "actual_date":          str(row["date_only"]),
-        "cluster_id":           cluster_id,
+        "cluster_id":           rep["cluster_id"],
         "representative_date":  rep["representative_date"],
         "weight":               rep["weight"],
     })
@@ -184,58 +184,3 @@ df_mapping = pd.DataFrame(mapping_rows).sort_values("actual_date").reset_index(d
 mapping_path = os.path.join(final_dir, 'day_cluster_assignment.csv')
 df_mapping.to_csv(mapping_path, index=False)
 print(f"Day-cluster mapping exported to: {mapping_path}  ({len(df_mapping)} rows)")
-
-# Output B — full-year profiles (366 × 48 = 17 568 rows)
-# For each actual date, replicate the representative profile and substitute the date columns.
-rep_profiles = df_rep.set_index("date_only")   # index on representative date_only (as date object)
-
-expanded_chunks = []
-for _, map_row in df_mapping.iterrows():
-    actual_date = map_row["actual_date"]         # string "YYYY-MM-DD"
-    rep_date    = map_row["representative_date"] # string "YYYY-MM-DD"
-
-    # Extract 48 half-hours for this representative date
-    chunk = df_rep[df_rep["date_only"].astype(str) == rep_date].copy()
-
-    # Substitute date columns so the chunk appears as the actual date
-    actual_dt = pd.to_datetime(actual_date)
-    chunk["actual_date"] = actual_date
-    chunk["date"]        = actual_dt.strftime("%d/%m/%Y")
-    chunk["date_only"]   = actual_dt.date()
-    chunk["datetime"]    = pd.to_datetime(
-        actual_date + " " + chunk["heures"].astype(str)
-    )
-    chunk["month"]       = actual_dt.month
-
-    expanded_chunks.append(chunk)
-
-df_expanded = pd.concat(expanded_chunks, ignore_index=True)
-
-# Aggregate to hourly: max of all columns per (actual_date, hour)
-df_expanded["hour"] = df_expanded["heures"].str[:2].astype(int)
-
-skip = {"hour", "heures", "datetime", "actual_date"}
-numeric_cols = [c for c in df_expanded.columns
-                if c not in skip and pd.api.types.is_numeric_dtype(df_expanded[c])]
-categ_cols   = [c for c in df_expanded.columns
-                if c not in skip and not pd.api.types.is_numeric_dtype(df_expanded[c])]
-
-agg_dict = {c: "max"   for c in numeric_cols}
-agg_dict.update({c: "first" for c in categ_cols})
-
-df_hourly = (df_expanded
-             .groupby(["actual_date", "hour"], sort=True)
-             .agg(agg_dict)
-             .reset_index())
-
-df_hourly["heures"]   = df_hourly["hour"] + 1   # 1 = 00:00-01:00, 24 = 23:00-24:00
-df_hourly["datetime"] = pd.to_datetime(df_hourly["actual_date"]) + pd.to_timedelta(df_hourly["hour"], unit="h")
-df_hourly = df_hourly.drop(columns=["hour"])
-
-# Reorder: actual_date first
-cols = ["actual_date", "heures"] + [c for c in df_hourly.columns if c not in ("actual_date", "heures")]
-df_hourly = df_hourly[cols]
-
-expanded_path = os.path.join(final_dir, 'full_year_assigned_profiles.csv')
-df_hourly.to_csv(expanded_path, index=False)
-print(f"Full-year profiles exported to : {expanded_path}  ({len(df_hourly)} rows, hourly)")
