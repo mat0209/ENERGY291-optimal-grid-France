@@ -204,8 +204,8 @@ def fig_consumption_profiles():
         if full_days:
             mat = np.array(full_days)
             ax.fill_between(steps,
-                            np.percentile(mat,  5, axis=0),
-                            np.percentile(mat, 95, axis=0),
+                            mat.min(axis=0),
+                            mat.max(axis=0),
                             alpha=0.2, color=color)
 
         # Representative day profile
