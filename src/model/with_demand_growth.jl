@@ -15,7 +15,7 @@ pv_df   = CSV.read(joinpath(DATA, "ninja_pv_representative_days_2024_regions.csv
                    DataFrame)
 wind_df = CSV.read(joinpath(DATA, "ninja_wind_representative_days_2024_regions.csv"),
                    DataFrame)
-cap_df  = CSV.read(joinpath(DATA, "capacites_interregionales.csv"), DataFrame)
+cap_df  = CSV.read(joinpath(@__DIR__, "..", "..", "data", "final", "capacites_interregionales.csv"), DataFrame)
 
 # =============================================================================
 # Sets
