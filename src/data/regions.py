@@ -1,7 +1,25 @@
 import pandas as pd
+import numpy as np
 
 TRANSMISSION_IN = "data/final/lignes_transmission.csv"
+COMMUNES_PATH   = "data/raw/communes-france-2025.csv"
 OUTPUT_PATH     = "data/final/capacites_interregionales.csv"
+
+# ── Region centroids ───────────────────────────────────────────────────────────
+MAINLAND_CODES = {11, 24, 27, 28, 32, 44, 52, 53, 75, 76, 84, 93}
+communes = pd.read_csv(COMMUNES_PATH, index_col=0)
+centroids = (
+    communes[communes["reg_code"].isin(MAINLAND_CODES)]
+    .groupby("reg_nom")[["latitude_centre", "longitude_centre"]]
+    .mean()
+)
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    return R * 2 * np.arcsin(np.sqrt(a))
 
 df = pd.read_csv(TRANSMISSION_IN)
 
@@ -61,6 +79,21 @@ def _keep(row):
     return row["Capacite_MW_total"] >= 6000 and row["Capacite_400kV"] > 0
 
 agg = agg[agg.apply(_keep, axis=1)].reset_index(drop=True)
+
+# ── Add centroid-to-centroid distance ─────────────────────────────────────────
+def _distance(row):
+    try:
+        a = centroids.loc[row["Region_A"]]
+        b = centroids.loc[row["Region_B"]]
+        return round(haversine_km(a["latitude_centre"], a["longitude_centre"],
+                                  b["latitude_centre"], b["longitude_centre"]), 1)
+    except KeyError:
+        return None
+
+TORTUOSITY = 1.25   # detour factor from Hagspiel et al. (2014) / Fürsch et al. (2013)
+
+agg["Distance_km"]          = agg.apply(_distance, axis=1)
+agg["Distance_km_adjusted"] = (agg["Distance_km"] * TORTUOSITY).round(1)
 
 agg.to_csv(OUTPUT_PATH, index=False)
 
