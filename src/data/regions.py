@@ -1,7 +1,7 @@
 import pandas as pd
 
-TRANSMISSION_IN = "data/processed/lignes_transmission.csv"
-OUTPUT_PATH     = "data/processed/capacites_interregionales.csv"
+TRANSMISSION_IN = "data/final/lignes_transmission.csv"
+OUTPUT_PATH     = "data/final/capacites_interregionales.csv"
 
 df = pd.read_csv(TRANSMISSION_IN)
 
