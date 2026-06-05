@@ -102,18 +102,19 @@ MONTH_NAMES = ["January","February","March","April","May","June",
                "July","August","September","October","November","December"]
 
 results = []
-for cluster_id, med_idx in enumerate(medoid_indices, start=1):
-    members      = np.where(cluster_assignments == (cluster_id - 1))[0]
+for orig_idx, med_idx in enumerate(medoid_indices):   # orig_idx: 0-based, matches cluster_assignments
+    members      = np.where(cluster_assignments == orig_idx)[0]
     cluster_size = len(members)
-    weight       = cluster_size / n_days   # fraction of the year
+    weight       = cluster_size / n_days
 
     row     = daily_profiles.iloc[med_idx]
-    raw_mat = profile_3d[med_idx]          # (48, n_cols)
+    raw_mat = profile_3d[med_idx]
     conso   = raw_mat[:, 0]
     month   = row["month"]
 
     results.append({
-        "cluster_id":          cluster_id,
+        "orig_idx":            orig_idx,              # keep to rebuild lookup after sort
+        "cluster_id":          orig_idx + 1,          # temporary, overwritten below
         "representative_date": str(row["date_only"]),
         "month":               month,
         "month_name":          MONTH_NAMES[int(month) - 1],
@@ -124,7 +125,7 @@ for cluster_id, med_idx in enumerate(medoid_indices, start=1):
         "max_consumption_MW":  round(float(conso.max()),  1),
     })
 
-# Sort chronologically by representative date
+# Sort chronologically and renumber — orig_idx is kept to allow correct day assignment later
 results.sort(key=lambda r: r["representative_date"])
 for i, r in enumerate(results, start=1):
     r["cluster_id"] = i
@@ -164,18 +165,17 @@ df_rep.to_csv(profiles_path, index=False)
 print(f"Detailed profiles exported to: {profiles_path}")
 
 # ── 10. Assign Every Day of the Year to Its Representative ────────────────────
-# Build a lookup: cluster_id (1-based) → dict with representative_date and weight
-cluster_lookup = {r["cluster_id"]: r for r in results}
+# Lookup by ORIGINAL 0-based index (matches cluster_assignments values directly)
+orig_lookup = {r["orig_idx"]: r for r in results}
 
 # Output A — mapping CSV (366 rows)
 mapping_rows = []
 for i, row in daily_profiles.iterrows():
-    assignment   = int(cluster_assignments[i])   # 0-based cluster index
-    cluster_id   = assignment + 1                # 1-based
-    rep          = cluster_lookup[cluster_id]
+    orig_idx = int(cluster_assignments[i])   # 0-based, original k-medoids order
+    rep      = orig_lookup[orig_idx]
     mapping_rows.append({
         "actual_date":          str(row["date_only"]),
-        "cluster_id":           cluster_id,
+        "cluster_id":           rep["cluster_id"],
         "representative_date":  rep["representative_date"],
         "weight":               rep["weight"],
     })
