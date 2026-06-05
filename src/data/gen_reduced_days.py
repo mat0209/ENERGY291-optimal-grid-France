@@ -2,9 +2,8 @@ import pandas as pd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PROCESSED = ROOT / "data" / "processed"
+FINAL = ROOT / "data" / "final"
 
-# Mapping: nuclear unit -> region name in eco2mix
 UNIT_TO_REGION = {
     "BUGEY-2":     "Auvergne-Rhône-Alpes",
     "BUGEY-3":     "Auvergne-Rhône-Alpes",
@@ -19,8 +18,8 @@ UNIT_TO_REGION = {
     "GRAVELINES-3": "Hauts-de-France",
 }
 
-# --- Load selected nuclear production ---
-nuc = pd.read_csv(PROCESSED / "production_nucleaire.csv")
+# --- Load nuclear production (hourly, local Paris time) ---
+nuc = pd.read_csv(FINAL / "production_nucleaire.csv")
 nuc["start_date"] = pd.to_datetime(nuc["start_date"], utc=True).dt.tz_convert("Europe/Paris")
 nuc["Date"] = nuc["start_date"].dt.strftime("%Y-%m-%d")
 nuc["Heure"] = nuc["start_date"].dt.strftime("%H:%M")
@@ -33,27 +32,34 @@ nuclear_per_region = (
     .rename(columns={"value_MW": "nuclear_selected_MW"})
 )
 
-# --- Load eco2mix regional (representative days, hourly) ---
-eco = pd.read_csv(PROCESSED / "eco2mix_regional_representative_days_2024.csv", sep=";")
+# --- Load eco2mix (half-hourly), keep row with max consumption per hour ---
+eco = pd.read_csv(FINAL / "eco2mix_regional_new_representative_days.csv", sep=";")
 
-# Total real generation = sum of all production sources
-gen_cols = ["Thermique (MW)", "Nucléaire (MW)", "Eolien terrestre", "Eolien offshore",
-            "Solaire (MW)", "Hydraulique (MW)", "Pompage (MW)", "Bioénergies (MW)"]
-eco["real_gen_MW"] = eco[gen_cols].apply(pd.to_numeric, errors="coerce").sum(axis=1)
+num_cols = [c for c in eco.columns if c not in ["Code INSEE région", "Région", "Date", "Heure"]]
+eco[num_cols] = eco[num_cols].apply(pd.to_numeric, errors="coerce")
+eco["datetime"] = pd.to_datetime(eco["Date"] + " " + eco["Heure"])
+eco["hour"] = eco["datetime"].dt.floor("h")
+
+# Within each (region, hour) group, keep the row with highest consumption
+idx = eco.groupby(["Code INSEE région", "Région", "Date", "hour"])["Consommation (MW)"].idxmax()
+eco_hourly = eco.loc[idx].copy()
+eco_hourly["Heure"] = eco_hourly["hour"].dt.strftime("%H:%M")
+eco_hourly = eco_hourly.drop(columns=["datetime", "hour"])
 
 # --- Merge and compute gen_reduced ---
-result = eco.merge(nuclear_per_region, on=["Région", "Date", "Heure"], how="left")
+result = eco_hourly.merge(nuclear_per_region, on=["Région", "Date", "Heure"], how="left")
 result["nuclear_selected_MW"] = result["nuclear_selected_MW"].fillna(0)
-result["gen_reduced_MW"] = result["real_gen_MW"] - result["nuclear_selected_MW"]
-result["nuclear_gen_reduced_MW"] = pd.to_numeric(result["Nucléaire (MW)"], errors="coerce") - result["nuclear_selected_MW"]
+result["gen_reduced_MW"] = result["Total gen (MW)"] - result["nuclear_selected_MW"]
+result["nuclear_gen_reduced_MW"] = (
+    pd.to_numeric(result["Nucléaire (MW)"], errors="coerce") - result["nuclear_selected_MW"]
+)
 
-result.to_csv(PROCESSED / "gen_reduced_days_2024.csv", index=False, sep=";")
-print(f"Saved {len(result)} rows to gen_reduced_days_2024.csv")
+result.to_csv(FINAL / "gen_reduced_days.csv", index=False, sep=";")
+print(f"Saved {len(result)} rows to gen_reduced_days.csv")
 
-# Quick check
 print("\nNuclear selected by region (sum over all days):")
 print(
-    result.groupby("Région")[["nuclear_selected_MW", "real_gen_MW", "gen_reduced_MW"]]
+    result.groupby("Région")[["nuclear_selected_MW", "Total gen (MW)", "gen_reduced_MW"]]
     .sum()
     .round(0)
     .to_string()
