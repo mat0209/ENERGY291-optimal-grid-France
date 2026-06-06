@@ -82,37 +82,22 @@ for i in 1:nrow(pv_df)
 end
 
 # =============================================================================
-# Expand to 366 actual days using cluster assignment
+# Cluster assignment for Kotzur seasonal battery model
 # =============================================================================
 cluster_df = CSV.read(joinpath(@__DIR__, "..", "..", "data", "final", "day_cluster_assignment.csv"), DataFrame)
 sort!(cluster_df, :actual_date)
 
-all_actual_dates = string.(cluster_df.actual_date)   # 366 actual dates as strings
-D_full = length(all_actual_dates)                    # 366
+N = nrow(cluster_df)   # 366 actual days
 
-rep_idx_map = Dict(
-    string(row.actual_date) => date_idx[string(row.representative_date)]
-    for row in eachrow(cluster_df)
-)
+# For each actual day i (1:N) in chronological order: index of its typical day (1:D)
+# This ordering is what enables seasonal storage: e_inter follows the actual calendar
+day_to_typday = [date_idx[string(row.representative_date)] for row in eachrow(cluster_df)]
 
-demand_full      = zeros(R, D_full, T)
-gen_reduced_full = zeros(R, D_full, T)
-cf_solar_full    = zeros(R, D_full, T)
-cf_wind_full     = zeros(R, D_full, T)
-
-for (i, ad) in enumerate(all_actual_dates)
-    d_rep = rep_idx_map[ad]
-    demand_full[:, i, :]      = demand[:, d_rep, :]
-    gen_reduced_full[:, i, :] = gen_reduced[:, d_rep, :]
-    cf_solar_full[:, i, :]    = cf_solar[:, d_rep, :]
-    cf_wind_full[:, i, :]     = cf_wind[:, d_rep, :]
+# Number of actual days assigned to each typical day
+cluster_size = zeros(Int, D)
+for d in day_to_typday
+    cluster_size[d] += 1
 end
-
-D           = D_full
-demand      = demand_full
-gen_reduced = gen_reduced_full
-cf_solar    = cf_solar_full
-cf_wind     = cf_wind_full
 
 # =============================================================================
 # Costs
@@ -169,10 +154,16 @@ set_silent(model)
 @variable(model, y_trans_400[pairs] >= 0, Int)           # new 400 kV transmission capacity
 @variable(model, y_trans_225[pairs] >= 0, Int)           # new 225 kV transmission capacity
 
-@variable(model, b_charge[1:R, 1:D, 1:T]    >= 0) # battery charging      [MW]
-@variable(model, b_discharge[1:R, 1:D, 1:T] >= 0) # battery discharging   [MW]
-@variable(model, e[1:R, 1:D, 0:T]           >= 0) # state of charge       [MWh]
-@variable(model, flow[pairs, 1:D, 1:T])            # flow (rA→rB) > 0 = export de rA vers rB [MW]
+@variable(model, b_charge[1:R, 1:D, 1:T]    >= 0)  # battery charging         [MW]
+@variable(model, b_discharge[1:R, 1:D, 1:T] >= 0)  # battery discharging      [MW]
+@variable(model, flow[pairs, 1:D, 1:T])             # flow rA→rB, >0 = export  [MW]
+
+# --- Kotzur seasonal battery SOC (Kotzur et al. 2018) ---
+# SOC(r, i, t) = e_inter[r,i] + e_intra[r,f(i),t]
+@variable(model, e_intra[1:R, 1:D, 0:T])           # intra-period SOC, starts at 0, can be negative
+@variable(model, e_intra_max[1:R, 1:D])            # aux: max of e_intra over t per typical day
+@variable(model, e_intra_min[1:R, 1:D])            # aux: min of e_intra over t per typical day
+@variable(model, e_inter[1:R, 1:N] >= 0)           # inter-period SOC at start of each actual day
 
 # --- Objective: minimise total annualised investment cost ---
 @objective(model, Min,
@@ -185,13 +176,12 @@ set_silent(model)
 # --- Constraints ---
 for r in 1:R, d in 1:D
 
-    # (4) Battery à 50% au début et à la fin de chaque journée
-    @constraint(model, e[r, d, 0] == 0.5 * x_bat[r])
-    @constraint(model, e[r, d, T] == 0.5 * x_bat[r])
+    # Intra-period SOC starts at 0 at the beginning of each typical day
+    @constraint(model, e_intra[r, d, 0] == 0)
 
     for t in 1:T
 
-        # (1) Energy balance avec flux bilatéraux
+        # (1) Energy balance
         @constraint(model,
             gen_reduced[r, d, t]
             + cf_solar[r, d, t] * x_solar[r]
@@ -203,18 +193,36 @@ for r in 1:R, d in 1:D
             >= demand[r, d, t]
         )
 
-        # (3) Battery state of charge evolution
+        # (2) Intra-period SOC evolution
         @constraint(model,
-            e[r, d, t] == e[r, d, t-1] + b_charge[r, d, t] - b_discharge[r, d, t]
+            e_intra[r, d, t] == e_intra[r, d, t-1] + b_charge[r, d, t] - b_discharge[r, d, t]
         )
 
-        # (5) Battery energy capacity
-        @constraint(model, e[r, d, t] <= x_bat[r])
+        # (3) Auxiliary max/min tracking (used for capacity constraints)
+        @constraint(model, e_intra[r, d, t] <= e_intra_max[r, d])
+        @constraint(model, e_intra[r, d, t] >= e_intra_min[r, d])
 
-        # (6) Battery power capacity — 4-hour battery: max power = capacity / 4
+        # (4) Power capacity — 4-hour battery
         @constraint(model, b_charge[r, d, t]    <= x_bat[r] / 4.0)
         @constraint(model, b_discharge[r, d, t] <= x_bat[r] / 4.0)
     end
+end
+
+# (5) Cyclic annual condition: Σ_d cluster_size[d] × e_intra[r,d,T] = 0
+for r in 1:R
+    @constraint(model, sum(cluster_size[d] * e_intra[r, d, T] for d in 1:D) == 0)
+end
+
+# (6) Inter-period SOC evolution — follows actual chronological order of 366 days
+for r in 1:R, i in 1:N-1
+    @constraint(model, e_inter[r, i+1] == e_inter[r, i] + e_intra[r, day_to_typday[i], T])
+end
+
+# (7) Capacity constraints via aux min/max — N constraints instead of N×T (Kotzur Appendix B)
+for r in 1:R, i in 1:N
+    d = day_to_typday[i]
+    @constraint(model, e_inter[r, i] + e_intra_max[r, d] <= x_bat[r])
+    @constraint(model, e_inter[r, i] + e_intra_min[r, d] >= 0)
 end
 
 # (2) Capacités de transmission interrégionales
@@ -262,7 +270,7 @@ println("=== Nouvelles lignes de transmission ===")
     "Région A", "Région B", "400kV(nb)", "225kV(nb)", "Cap400(MW)", "Cap225(MW)")
 println("-" ^ 90)
 region_name = Dict(v => k for (k, v) in region_idx)
-local trans_built = false
+trans_built = false
 for p in sort(pairs)
     n400 = round(Int, value(y_trans_400[p]))
     n225 = round(Int, value(y_trans_225[p]))
