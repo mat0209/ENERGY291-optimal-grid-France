@@ -128,8 +128,21 @@ New overhead transmission line investment costs
                                  magnitude; no single-figure unit cost for new
                                  construction is published by RTE.
 
+   Levelized (annualized) cost
+   The investment cost is levelized using a discount rate of 6 % over a 40-year
+   lifetime (matching the DEA lifetime figure), plus the DEA fixed O&M rate of
+   1.5 %/year of investment:
+
+     CRF  = 0.06 × (1.06)^40 / ((1.06)^40 − 1)  =  6.646 %/year
+     FOM  = 1.5 %/year
+     ────────────────────────────────────────────────────────────
+     Total annualized rate = CRF + FOM            =  8.146 %/year
+
+   Applied to the 400 kV unit cost:  0.08146 × 750  =  61.10 EUR/MW/km/year
+   Applied to the 225 kV unit cost:  0.08146 × 1250 = 101.82 EUR/MW/km/year
+
    Investment cost for a new corridor (i, j) is computed as:
-     C_ij = cap_MW × Distance_km_adjusted × cost_EUR_per_MW_per_km
+     C_ij = cap_MW × Distance_km_adjusted × annualized_cost_EUR_per_MW_per_km
    where Distance_km_adjusted already incorporates the 1.25 tortuosity factor.
 
    References:

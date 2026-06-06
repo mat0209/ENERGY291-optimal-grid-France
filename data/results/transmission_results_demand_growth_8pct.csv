@@ -1,0 +1,29 @@
+Region_A;Region_B;Dist_km;Cap_exist_MW;New_lines_400kV;New_lines_225kV;New_cap_400_MW;New_cap_225_MW;Total_cap_MW
+Centre-Val de Loire;Grand Est;412.4;6300.0;0;0;0.0;0.0;6300.0
+Auvergne-Rhône-Alpes;Bourgogne-Franche-Comté;243.4;35500.0;0;0;0.0;0.0;35500.0
+Bourgogne-Franche-Comté;Grand Est;213.0;18100.0;0;0;0.0;0.0;18100.0
+Bretagne;Normandie;307.8;6800.0;0;0;0.0;0.0;6800.0
+Bourgogne-Franche-Comté;Provence-Alpes-Côte d'Azur;466.1;16500.0;0;0;0.0;0.0;16500.0
+Hauts-de-France;Île-de-France;170.6;62100.0;0;0;0.0;0.0;62100.0
+Auvergne-Rhône-Alpes;Centre-Val de Loire;399.2;14700.0;0;0;0.0;0.0;14700.0
+Provence-Alpes-Côte d'Azur;Île-de-France;753.9;11500.0;0;0;0.0;0.0;11500.0
+Bretagne;Pays de la Loire;217.6;26300.0;0;0;0.0;0.0;26300.0
+Normandie;Pays de la Loire;242.5;8800.0;0;0;0.0;0.0;8800.0
+Nouvelle-Aquitaine;Occitanie;267.9;25900.0;0;0;0.0;0.0;25900.0
+Auvergne-Rhône-Alpes;Occitanie;377.8;34300.0;0;0;0.0;0.0;34300.0
+Bretagne;Centre-Val de Loire;424.0;19500.0;0;0;0.0;0.0;19500.0
+Normandie;Île-de-France;212.2;45500.0;0;0;0.0;0.0;45500.0
+Grand Est;Hauts-de-France;325.2;14900.0;0;0;0.0;0.0;14900.0
+Centre-Val de Loire;Nouvelle-Aquitaine;374.6;16400.0;0;0;0.0;0.0;16400.0
+Auvergne-Rhône-Alpes;Provence-Alpes-Côte d'Azur;264.4;24800.0;0;0;0.0;0.0;24800.0
+Centre-Val de Loire;Pays de la Loire;218.8;22900.0;0;0;0.0;0.0;22900.0
+Grand Est;Normandie;512.9;7200.0;0;0;0.0;0.0;7200.0
+Centre-Val de Loire;Île-de-France;178.1;33800.0;0;0;0.0;0.0;33800.0
+Occitanie;Provence-Alpes-Côte d'Azur;420.8;45400.0;0;0;0.0;0.0;45400.0
+Bourgogne-Franche-Comté;Île-de-France;328.5;3400.0;0;0;0.0;0.0;3400.0
+Bourgogne-Franche-Comté;Centre-Val de Loire;330.5;9100.0;0;0;0.0;0.0;9100.0
+Grand Est;Île-de-France;306.5;10100.0;0;0;0.0;0.0;10100.0
+Hauts-de-France;Normandie;253.1;14300.0;0;0;0.0;0.0;14300.0
+Nouvelle-Aquitaine;Pays de la Loire;353.1;1200.0;0;0;0.0;0.0;1200.0
+Auvergne-Rhône-Alpes;Nouvelle-Aquitaine;432.4;18300.0;0;0;0.0;0.0;18300.0
+Auvergne-Rhône-Alpes;Pays de la Loire;575.4;6000.0;0;0;0.0;0.0;6000.0
