@@ -50,6 +50,16 @@ DATA SOURCES
              communes) used in map visualizations and for computing inter-regional
              straight-line distances.
 
+6. RTE Bilan Électrique 2024 — Nuclear fleet capacity factor
+   Source  : https://analysesetdonnees.rte-france.com/bilan-electrique-2024/production
+   Used for: Calibrating the nuclear capacity factor applied to Flamanville 3 in
+             the model_with_fla.jl scenario. The 2024 bilan reports a nuclear
+             production of 361.7 TWh over an installed capacity of ~61.4 GW,
+             yielding a fleet-average capacity factor of ~67 % (361 700 GWh /
+             (61 400 MW × 8 760 h)). This figure reflects the French fleet of
+             ageing reactors still recovering from the 2022 corrosion crisis
+             (availability 62 % in H1 2023, 70 % in H1 2024).
+
 ────────────────────────────────────────────────────────────────────────────────
 METHODOLOGICAL NOTES
 ────────────────────────────────────────────────────────────────────────────────
@@ -151,6 +161,45 @@ New overhead transmission line investment costs
      RTE (2025). Schéma Décennal de Développement du Réseau — Fiche 13 :
        Choix technologiques.
        https://assets.rte-france.com/prod/public/2025-03/2025-03-21-sddr-fiche-13-choix-technologiques.pdf
+
+Flamanville 3 — scenario hypothesis (model_with_fla.jl)
+   Flamanville 3 (EPR, Normandie) was not commercially operational during the
+   2024 data period used by the model (first criticality May 2024; commercial
+   operation December 2024). It is therefore absent from the eco2mix regional
+   aggregate data underlying gen_reduced_MW. For the no-fossil + Flamanville 3
+   scenario, its output is added as a fixed flat parameter in the energy balance
+   for Normandie, with the following assumptions:
+
+     Nominal capacity  : 1 630 MW  (EDF official figure for Flamanville 3 EPR)
+     Capacity factor   : 75 %
+     Annual output     : 1 630 × 0.75 × 8 760 ≈ 10.7 TWh/yr
+
+   Rationale for 75 % CF:
+   The 2024 French fleet average is ~67 % (see Data Source 6), depressed by
+   ageing reactors and ongoing maintenance catch-up. A new EPR entering full
+   commercial service by 2030 is expected to perform above the fleet average.
+   75 % is a conservative estimate consistent with the design availability of
+   the EPR (~85–92 %) discounted for planned outages and early-operation ramp-up.
+   RTE's Futurs Énergétiques 2050 scenarios use 70–80 % for new nuclear in the
+   medium term; 75 % sits in the middle of that range.
+
+   Rationale for flat hourly profile:
+   Nuclear is a baseload technology and is not a decision variable in the
+   capacity expansion model. The optimiser finds the least-cost mix of solar,
+   wind, and batteries to complement existing (and fixed) generation. Imposing a
+   flat profile is standard practice in this type of model and does not
+   materially affect the investment results, which are driven by annual energy
+   balance, not sub-daily dispatch.
+
+   References:
+     EDF (2024). Flamanville 3 — Données techniques.
+       https://www.edf.fr/groupe-edf/nos-energies/carte-de-nos-energies-en-france/
+       centrale-nucleaire-de-flamanville
+     RTE (2025). Bilan Électrique 2024 — Production nucléaire.
+       https://analysesetdonnees.rte-france.com/bilan-electrique-2024/production
+     RTE (2021). Futurs Énergétiques 2050 — Hypothèses et résultats.
+       https://www.rte-france.com/analyses-tendances-et-prospectives/
+       bilan-previsionnel-2050-futurs-energetiques
 
 K-medoids clustering — representative days
    10 representative days are selected from 2024 using k-medoids (PAM) on the

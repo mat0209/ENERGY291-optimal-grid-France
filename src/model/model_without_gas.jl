@@ -1,5 +1,5 @@
-# Final capacity expansion model: seasonal battery (Kotzur), endogenous transmission, +8% demand.
-# Minimises annualised CAPEX for solar, wind, batteries and new transmission lines (HiGHS MILP).
+# Capacity expansion model: no fossil (thermal) generation — all gas/oil removed from gen_reduced.
+# Otherwise identical to final_model.jl (Kotzur seasonal battery, endogenous transmission, +8% demand).
 # Inputs: data/final/; Output: data/results/ and figures/results/.
 
 using JuMP, CSV, DataFrames, Printf, Dates, Plots, HiGHS
@@ -55,17 +55,19 @@ pairs_out = [[(rA,rB) for (rA,rB) in pairs if rA == r] for r in 1:R]
 # Parameters — arrays indexed [r, d, t], t ∈ 1:24
 # =============================================================================
 demand      = zeros(R, D, T)   # D_{r,d,t}  [MW]
-gen_reduced = zeros(R, D, T)   # G̃_{r,d,t}  [MW]
+gen_reduced = zeros(R, D, T)   # G̃_{r,d,t}  [MW]  — fossil excluded
 cf_solar    = zeros(R, D, T)   # CF^solar_{r,d,t}  ∈ [0,1]
 cf_wind     = zeros(R, D, T)   # CF^wind_{r,d,t}   ∈ [0,1]
 
 # --- Demand and reduced generation (eco2mix, local French time) ---
+# gen_reduced = gen_reduced_MW − Thermique: removes all fossil (gas/oil) production
 for row in eachrow(gen_df)
     r = region_idx[row.Région]
     d = date_idx[string(row.Date)]
     t = Dates.hour(row.Heure) + 1   # Time(0,0)→1, Time(23,0)→24
     demand[r, d, t]      = coalesce(row[Symbol("Consommation (MW)")], 0.0)
-    gen_reduced[r, d, t] = coalesce(row.gen_reduced_MW, 0.0)
+    thermal_MW           = coalesce(row[Symbol("Thermique (MW)")], 0.0)
+    gen_reduced[r, d, t] = coalesce(row.gen_reduced_MW, 0.0) - thermal_MW
 end
 
 demand .*= 1.08  # +8% demand growth scenario
@@ -94,7 +96,6 @@ sort!(cluster_df, :actual_date)
 N = nrow(cluster_df)   # 366 actual days
 
 # For each actual day i (1:N) in chronological order: index of its typical day (1:D)
-# This ordering enables seasonal storage: e_inter follows the actual calendar
 day_to_typday = [date_idx[string(row.representative_date)] for row in eachrow(cluster_df)]
 
 # Number of actual days assigned to each typical day
@@ -115,36 +116,6 @@ c_trans_225 = 101.8269199   # €/MW/km/yr  — 225 kV transmission lines (annua
 cap_trans_400 = 1500.0  # MW per 400 kV transmission line
 cap_trans_225 = 400.0   # MW per 225 kV transmission line
 
-#println("Checking gen_reduced vs demand:")
-#for d in 1:D
-#    gen_tot = sum(gen_reduced[r, d, t] for r in 1:R, t in 1:T)
-#    dem_tot = sum(demand[r, d, t]      for r in 1:R, t in 1:T)
-#    cf_wind_tot  = sum(cf_wind[r, d, t]  for r in 1:R, t in 1:T)
-#    cf_solar_tot = sum(cf_solar[r, d, t] for r in 1:R, t in 1:T)
-#    @printf("Day %2d : gen_reduced=%.0f MWh  demand=%.0f MWh  ratio=%.2f  cf_wind=%.1f  cf_solar=%.1f\n",
-#            d, gen_tot, dem_tot, gen_tot/dem_tot, cf_wind_tot, cf_solar_tot)
-#end
-
-
-#println("\nRegion connectivity:")
-#for r in 1:R
-#    max_in  = sum(cap[p] for p in pairs_in[r];  init=0.0)
-#    max_out = sum(cap[p] for p in pairs_out[r]; init=0.0)
-#    @printf("%-35s  max_import=%7.0f MW  max_export=%7.0f MW\n",
-#            regions[r], max_in, max_out)
-#end
-
-#println("\nMost critical hour by region:")
-#for r in 1:R
-#    max_in = sum(cap[p] for p in pairs_in[r]; init=0.0)
-#    worst = minimum(gen_reduced[r,d,t] + max_in
-#                    for d in 1:D, t in 1:T)
-#    worst_demand = maximum(demand[r,d,t] for d in 1:D, t in 1:T)
-#    @printf("%-35s  min_supply=%.0f MW  max_demand=%.0f MW\n",
-#            regions[r], worst, worst_demand)
-#end
-
-
 # =============================================================================
 # Model
 # =============================================================================
@@ -163,7 +134,6 @@ set_silent(model)
 @variable(model, flow[pairs, 1:D, 1:T])             # flow rA→rB, >0 = export  [MW]
 
 # --- Kotzur seasonal battery SOC (Kotzur et al. 2018) ---
-# SOC(r, i, t) = e_inter[r,i] + e_intra[r,f(i),t]
 @variable(model, e_intra[1:R, 1:D, 0:T])           # intra-period SOC, starts at 0, can be negative
 @variable(model, e_intra_max[1:R, 1:D])            # aux: max of e_intra over t per typical day
 @variable(model, e_intra_min[1:R, 1:D])            # aux: min of e_intra over t per typical day
@@ -229,7 +199,7 @@ for r in 1:R, i in 1:N
     @constraint(model, e_inter[r, i] + e_intra_min[r, d] >= 0)
 end
 
-# (2) Interregional transmission capacities
+# (8) Interregional transmission capacities
 for (rA, rB) in pairs
     cap_new = cap[(rA,rB)] + y_trans_400[(rA,rB)] * cap_trans_400 + y_trans_225[(rA,rB)] * cap_trans_225
     for d in 1:D, t in 1:T
@@ -237,8 +207,6 @@ for (rA, rB) in pairs
         @constraint(model, flow[(rA,rB), d, t] >= -cap_new)
     end
 end
-
-
 
 # =============================================================================
 # Solve
@@ -248,7 +216,7 @@ optimize!(model)
 # =============================================================================
 # Results
 # =============================================================================
-println("\n=== Optimal Capacity Expansion — With Limited Transmission + 8% Demand Growth ===")
+println("\n=== Optimal Capacity Expansion — No Fossil Generation + Limited Transmission + 8% Demand Growth ===")
 println("Status    : ", termination_status(model))
 println("Objective : ", round(objective_value(model) / 1e6, digits=1), " M€/yr")
 println()
@@ -303,7 +271,7 @@ bar(regions_plot, solar_vals,
     color = "#f28e2b",
     xlabel = "Region",
     ylabel = "Capacity Added (MW)",
-    title = "Optimal Capacity Expansion by Region",
+    title = "Optimal Capacity Expansion by Region — No Fossil",
     legend = :topright,
     xrotation = 45)
 bar!(regions_plot, wind_vals,
@@ -315,7 +283,7 @@ bar!(regions_plot, bat_vals,
     color = "#7b5ea6",
     bottom = solar_vals .+ wind_vals)
 
-output_path = joinpath(fig_dir, "capacity_results_demand_growth_8pct.png")
+output_path = joinpath(fig_dir, "capacity_results_no_fossil.png")
 savefig(output_path)
 println("Saved plot to ", output_path)
 
@@ -326,12 +294,8 @@ results = DataFrame(
     Wind_MW = [value(x_wind[r]) for r in 1:R],
     Battery_MWh = [value(x_bat[r]) for r in 1:R],
 )
-CSV.write(joinpath(DATA_results, "capacity_results_demand_growth_8pct.csv"), results; delim=';')
-println("Saved results to ", joinpath(DATA_results, "capacity_results_demand_growth_8pct.csv"))
-
-open(joinpath(DATA_results, "cost_with_gas.txt"), "w") do f
-    write(f, string(round(objective_value(model) / 1e6, digits=2)))
-end
+CSV.write(joinpath(DATA_results, "capacity_results_no_fossil.csv"), results; delim=';')
+println("Saved results to ", joinpath(DATA_results, "capacity_results_no_fossil.csv"))
 
 # --- Save transmission results to CSV ---
 trans_results = DataFrame(
@@ -345,5 +309,9 @@ trans_results = DataFrame(
     New_cap_225_MW  = [round(Int, value(y_trans_225[p])) * cap_trans_225 for p in pairs],
     Total_cap_MW    = [cap[p] + round(Int, value(y_trans_400[p])) * cap_trans_400 + round(Int, value(y_trans_225[p])) * cap_trans_225 for p in pairs],
 )
-CSV.write(joinpath(DATA_results, "transmission_results_demand_growth_8pct.csv"), trans_results; delim=';')
-println("Saved transmission results to ", joinpath(DATA_results, "transmission_results_demand_growth_8pct.csv"))
+CSV.write(joinpath(DATA_results, "transmission_results_no_fossil.csv"), trans_results; delim=';')
+println("Saved transmission results to ", joinpath(DATA_results, "transmission_results_no_fossil.csv"))
+
+open(joinpath(DATA_results, "cost_no_fossil.txt"), "w") do f
+    write(f, string(round(objective_value(model) / 1e6, digits=2)))
+end
