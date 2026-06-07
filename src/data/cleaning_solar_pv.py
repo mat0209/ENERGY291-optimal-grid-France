@@ -1,3 +1,9 @@
+"""
+Filter Renewables.ninja PV/wind data to representative dates, aggregate NUTS2 zones
+to 13 French administrative regions, and process regional eco2mix consumption data.
+Outputs to data/processed/.
+"""
+
 import pandas as pd
 from pathlib import Path
 
@@ -82,7 +88,7 @@ wind_regions = aggregate_to_regions(wind_filtered, WIND_TO_REGION)
 wind_regions.to_csv(PROCESSED / "ninja_wind_representative_days_2024_regions.csv", index=False)
 print(f"Wind (13 regions): {len(wind_regions)} rows, {len(wind_regions.columns)-1} regions")
 
-# --- Eco2mix régional ---
+# --- Regional Eco2mix ---
 eco_raw = pd.read_csv(
     RAW / "eco2mix-regional-cons-def.csv",
     sep=";",
@@ -115,4 +121,4 @@ eco_hourly = eco_hourly.drop(columns=["hour"])
 
 eco_hourly.to_csv(PROCESSED / "eco2mix_regional_representative_days_2024.csv", index=False, sep=";")
 n_regions = eco_hourly["Région"].nunique()
-print(f"Eco2mix: {len(eco_hourly)} rows saved (12 jours x 24h x {n_regions} régions)")
+print(f"Eco2mix: {len(eco_hourly)} rows saved (12 days x 24h x {n_regions} regions)")

@@ -1,3 +1,7 @@
+# Capacity expansion model — unlimited transmission between regions.
+# Minimises annualised CAPEX for solar, wind and batteries to meet regional demand.
+# Inputs: data/processed/; Output: data/results/ and figures/results/.
+
 using JuMP, Clp, CSV, DataFrames, Printf, Dates, Plots
 
 # =============================================================================

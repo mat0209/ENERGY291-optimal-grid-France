@@ -1,3 +1,8 @@
+"""
+Visualize national generation mix and consumption for each representative day.
+Reads from data/final/; writes figures to figures/.
+"""
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker

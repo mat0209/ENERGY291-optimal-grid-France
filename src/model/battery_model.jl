@@ -1,3 +1,6 @@
+# Capacity expansion model with seasonal battery storage (Kotzur et al. 2018) and transmission.
+# Inputs: data/final/; Output: printed results.
+
 using JuMP, CSV, DataFrames, Printf, Dates, Clp
 
 # =============================================================================

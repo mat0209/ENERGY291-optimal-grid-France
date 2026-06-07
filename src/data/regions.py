@@ -1,3 +1,8 @@
+"""
+Aggregate RTE transmission segments by inter-regional corridor and compute transfer capacities.
+Reads lignes_transmission.csv; outputs capacites_interregionales.csv to data/final/.
+"""
+
 import pandas as pd
 import numpy as np
 
@@ -23,7 +28,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
 
 df = pd.read_csv(TRANSMISSION_IN)
 
-# Keep only tronçons where both endpoints are assigned to a mainland French region
+# Keep only segments where both endpoints are assigned to a mainland French region
 EXCLUDED = {"Étranger", "Corse"}
 both_assigned = (
     df["Reg_Depart"].notna()  & df["Reg_Arrivee"].notna() &
@@ -97,8 +102,8 @@ agg["Distance_km_adjusted"] = (agg["Distance_km"] * TORTUOSITY).round(1)
 
 agg.to_csv(OUTPUT_PATH, index=False)
 
-print(f"Saved {len(agg)} corridors interrégionaux -> {OUTPUT_PATH}")
-print(f"Capacité totale de transit : {agg['Capacite_MW_total'].sum():,.0f} MW")
+print(f"Saved {len(agg)} inter-regional corridors -> {OUTPUT_PATH}")
+print(f"Total transfer capacity: {agg['Capacite_MW_total'].sum():,.0f} MW")
 print()
-print("Top 20 corridors :")
+print("Top 20 corridors:")
 print(agg[["Region_A", "Region_B", "Capacite_MW_total", "Nb_troncons"]].head(20).to_string(index=False))

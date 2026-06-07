@@ -1,9 +1,21 @@
+"""
+Plot the inter-regional transmission network on a map of France using Plotly.
+Reads corridor capacities from data/final/; outputs HTML/PNG to figures/transmission/.
+"""
+
+import json
+import os
 import pandas as pd
 import plotly.graph_objects as go
-import os
+import requests
 
 CORRIDORS_PATH = "data/final/capacites_interregionales.csv"
 COMMUNES_PATH  = "data/raw/communes-france-2025.csv"
+GEOJSON_CACHE  = "data/raw/regions-france.geojson"
+GEOJSON_URL    = (
+    "https://raw.githubusercontent.com/gregoiredavid/"
+    "france-geojson/master/regions-version-simplifiee.geojson"
+)
 OUTPUT_HTML    = "figures/transmission/transmission_network.html"
 OUTPUT_PNG     = "figures/transmission/transmission_network.png"
 
@@ -46,8 +58,54 @@ CAP_BINS = [
     ("> 35 GW",     35_000, float("inf")),
 ]
 
-# ── 3. Build figure ───────────────────────────────────────────────────────────
+# ── 3. Load regions GeoJSON (download once, cache locally) ────────────────────
+def _load_geojson():
+    if os.path.exists(GEOJSON_CACHE):
+        with open(GEOJSON_CACHE, encoding="utf-8") as f:
+            return json.load(f)
+    try:
+        resp = requests.get(GEOJSON_URL, timeout=15)
+        resp.raise_for_status()
+        geo = resp.json()
+        with open(GEOJSON_CACHE, "w", encoding="utf-8") as f:
+            json.dump(geo, f)
+        print(f"GeoJSON downloaded and cached -> {GEOJSON_CACHE}")
+        return geo
+    except Exception as exc:
+        print(f"Warning: could not load regions GeoJSON ({exc}). Borders skipped.")
+        return None
+
+regions_geo = _load_geojson()
+
+# ── 4. Build figure ───────────────────────────────────────────────────────────
 fig = go.Figure()
+
+# ── Region borders (dashed, light gray) ──────────────────────────────────────
+if regions_geo:
+    border_lons, border_lats = [], []
+    for feature in regions_geo["features"]:
+        try:
+            code = int(feature["properties"]["code"])
+        except (KeyError, ValueError):
+            continue
+        if code not in MAINLAND_CODES:
+            continue
+        geom = feature["geometry"]
+        polys = (
+            [geom["coordinates"]] if geom["type"] == "Polygon"
+            else geom["coordinates"]
+        )
+        for poly in polys:
+            for ring in poly:
+                border_lons += [pt[0] for pt in ring] + [ring[0][0], None]
+                border_lats += [pt[1] for pt in ring] + [ring[0][1], None]
+    fig.add_trace(go.Scattergeo(
+        lon=border_lons, lat=border_lats,
+        mode="lines",
+        line=dict(color="#bbbbbb", width=0.8, dash="dot"),
+        hoverinfo="skip",
+        showlegend=False,
+    ))
 
 # ── Legend traces: capacity bins (native Plotly legend → correct line widths) ─
 for label, lo, hi in CAP_BINS:

@@ -1,6 +1,8 @@
-using JuMP, Clp, CSV, DataFrames, Printf, Dates, Plots
+# Capacity expansion model with constrained inter-regional transmission.
+# Minimises annualised CAPEX for solar, wind and batteries; bilateral flows bounded by existing capacity.
+# Inputs: data/processed/ and data/final/; Output: data/results/ and figures/results/.
 
-# With constraint transmission
+using JuMP, Clp, CSV, DataFrames, Printf, Dates, Plots
 
 # =============================================================================
 # Paths
@@ -32,7 +34,7 @@ T = 24                # hours per day
 region_idx = Dict(r => i for (i, r) in enumerate(regions))
 date_idx   = Dict(d => i for (i, d) in enumerate(dates))
 
-# Capacités interrégionales : (rA, rB) => cap_MW  (une seule direction par paire du CSV)
+# Interregional capacities: (rA, rB) => cap_MW (one direction per CSV pair)
 cap = Dict(
     (region_idx[row.Region_A], region_idx[row.Region_B]) => Float64(row.Capacite_MW_total)
     for row in eachrow(cap_df)
@@ -40,7 +42,7 @@ cap = Dict(
 )
 pairs = collect(keys(cap))
 
-# Pour chaque région : paires dont elle est l'extrémité import (in) ou export (out)
+# For each region: pairs where it is the import (in) or export (out) endpoint
 pairs_in  = [[(rA,rB) for (rA,rB) in pairs if rB == r] for r in 1:R]
 pairs_out = [[(rA,rB) for (rA,rB) in pairs if rA == r] for r in 1:R]
 
@@ -97,7 +99,7 @@ set_silent(model)
 @variable(model, b_charge[1:R, 1:D, 1:T]    >= 0) # battery charging      [MW]
 @variable(model, b_discharge[1:R, 1:D, 1:T] >= 0) # battery discharging   [MW]
 @variable(model, e[1:R, 1:D, 0:T]           >= 0) # state of charge       [MWh]
-@variable(model, flow[pairs, 1:D, 1:T])            # flow (rA→rB) > 0 = export de rA vers rB [MW]
+@variable(model, flow[pairs, 1:D, 1:T])            # flow (rA→rB) > 0 = export from rA to rB [MW]
 
 # --- Objective: minimise total annualised investment cost ---
 @objective(model, Min,
@@ -110,12 +112,12 @@ set_silent(model)
 # --- Constraints ---
 for r in 1:R, d in 1:D
 
-    # (4) Battery initialisation cyclique : début du jour d = fin du jour précédent (mod D)
+    # (4) Cyclic battery: start of day d = end of previous day (mod D)
     @constraint(model, e[r, d, 0] == e[r, d == 1 ? D : d-1, T])
 
     for t in 1:T
 
-        # (1) Energy balance avec flux bilatéraux
+        # (1) Energy balance with bilateral flows
         @constraint(model,
             gen_reduced[r, d, t]
             + cf_solar[r, d, t] * x_solar[r]
@@ -141,7 +143,7 @@ for r in 1:R, d in 1:D
     end
 end
 
-# (2) Capacités de transmission interrégionales
+# (2) Interregional transmission capacities
 for (rA, rB) in pairs, d in 1:D, t in 1:T
     @constraint(model, -cap[(rA,rB)] <= flow[(rA,rB), d, t] <= cap[(rA,rB)])
 end
@@ -175,7 +177,7 @@ println("-" ^ 70)
     sum(value(x_wind[r])  for r in 1:R),
     sum(value(x_bat[r])   for r in 1:R))
 
-# --- Plot capacity results par région (stacked bar chart) ---
+# --- Plot capacity results by region (stacked bar chart) ---
 fig_dir = joinpath(@__DIR__, "..", "..", "figures", "results")
 mkpath(fig_dir)
 regions_plot = collect(regions)

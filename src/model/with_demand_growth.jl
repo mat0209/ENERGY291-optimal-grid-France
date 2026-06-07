@@ -1,3 +1,7 @@
+# Capacity expansion model with constrained transmission and +8% demand growth scenario.
+# Minimises annualised CAPEX for solar, wind and batteries; bilateral flows bounded by existing capacity.
+# Inputs: data/processed/ and data/final/; Output: data/results/ and figures/results/.
+
 using JuMP, CSV, DataFrames, Printf, Dates, Plots, Clp
 
 # =============================================================================
@@ -30,7 +34,7 @@ T = 24                # hours per day
 region_idx = Dict(r => i for (i, r) in enumerate(regions))
 date_idx   = Dict(d => i for (i, d) in enumerate(dates))
 
-# Capacités interrégionales : (rA, rB) => cap_MW  (une seule direction par paire du CSV)
+# Interregional capacities: (rA, rB) => cap_MW (one direction per CSV pair)
 cap = Dict(
     (region_idx[row.Region_A], region_idx[row.Region_B]) => Float64(row.Capacite_MW_total)
     for row in eachrow(cap_df)
@@ -38,7 +42,7 @@ cap = Dict(
 )
 pairs = collect(keys(cap))
 
-# Pour chaque région : paires dont elle est l'extrémité import (in) ou export (out)
+# For each region: pairs where it is the import (in) or export (out) endpoint
 pairs_in  = [[(rA,rB) for (rA,rB) in pairs if rB == r] for r in 1:R]
 pairs_out = [[(rA,rB) for (rA,rB) in pairs if rA == r] for r in 1:R]
 
@@ -59,7 +63,7 @@ for row in eachrow(gen_df)
     gen_reduced[r, d, t] = coalesce(row.gen_reduced_MW, 0.0)
 end
 
-demand .*= 1.08  # scénario +8% de consommation
+demand .*= 1.08  # +8% demand growth scenario
 
 # --- Capacity factors (Ninja timestamps are UTC, matched by date and UTC hour) ---
 for i in 1:nrow(pv_df)
@@ -83,30 +87,30 @@ c_solar = 84207.18832   # €/MW/yr   — onshore solar PV  (annualised CAPEX)
 c_wind  = 170873.2996   # €/MW/yr   — onshore wind       (annualised CAPEX)
 c_bat   = 25529.34076  # €/MWh/yr  — 4-hour Li-ion battery (energy capacity)
 
-println("Vérification gen_reduced vs demand :")
+println("Checking gen_reduced vs demand:")
 for d in 1:D
     gen_tot = sum(gen_reduced[r, d, t] for r in 1:R, t in 1:T)
     dem_tot = sum(demand[r, d, t]      for r in 1:R, t in 1:T)
-    @printf("Jour %2d : gen_reduced=%.0f MWh  demand=%.0f MWh  ratio=%.2f\n",
+    @printf("Day %2d : gen_reduced=%.0f MWh  demand=%.0f MWh  ratio=%.2f\n",
             d, gen_tot, dem_tot, gen_tot/dem_tot)
 end
 
 
-println("\nConnectivité des régions :")
+println("\nRegion connectivity:")
 for r in 1:R
     max_in  = sum(cap[p] for p in pairs_in[r];  init=0.0)
     max_out = sum(cap[p] for p in pairs_out[r]; init=0.0)
-    @printf("%-35s  import_max=%7.0f MW  export_max=%7.0f MW\n",
+    @printf("%-35s  max_import=%7.0f MW  max_export=%7.0f MW\n",
             regions[r], max_in, max_out)
 end
 
-println("\nHeure la plus critique par région :")
+println("\nMost critical hour by region:")
 for r in 1:R
     max_in = sum(cap[p] for p in pairs_in[r]; init=0.0)
     worst = minimum(gen_reduced[r,d,t] + max_in
                     for d in 1:D, t in 1:T)
     worst_demand = maximum(demand[r,d,t] for d in 1:D, t in 1:T)
-    @printf("%-35s  offre_min=%.0f MW  demande_max=%.0f MW\n",
+    @printf("%-35s  min_supply=%.0f MW  max_demand=%.0f MW\n",
             regions[r], worst, worst_demand)
 end
 
@@ -125,7 +129,7 @@ set_silent(model)
 @variable(model, b_charge[1:R, 1:D, 1:T]    >= 0) # battery charging      [MW]
 @variable(model, b_discharge[1:R, 1:D, 1:T] >= 0) # battery discharging   [MW]
 @variable(model, e[1:R, 1:D, 0:T]           >= 0) # state of charge       [MWh]
-@variable(model, flow[pairs, 1:D, 1:T])            # flow (rA→rB) > 0 = export de rA vers rB [MW]
+@variable(model, flow[pairs, 1:D, 1:T])            # flow (rA→rB) > 0 = export from rA to rB [MW]
 
 # --- Objective: minimise total annualised investment cost ---
 @objective(model, Min,
@@ -138,12 +142,12 @@ set_silent(model)
 # --- Constraints ---
 for r in 1:R, d in 1:D
 
-    # (4) Battery à 50% au début et à la fin de chaque journée
+    # (4) Battery initialized at 50% SoC at start and end of each day
     @constraint(model, e[r, d, 0] == 0.5 * x_bat[r])
 
     for t in 1:T
 
-        # (1) Energy balance avec flux bilatéraux
+        # (1) Energy balance with bilateral flows
         @constraint(model,
             gen_reduced[r, d, t]
             + cf_solar[r, d, t] * x_solar[r]
@@ -169,7 +173,7 @@ for r in 1:R, d in 1:D
     end
 end
 
-# (2) Capacités de transmission interrégionales
+# (2) Interregional transmission capacities
 for (rA, rB) in pairs, d in 1:D, t in 1:T
     @constraint(model, -cap[(rA,rB)] <= flow[(rA,rB), d, t] <= cap[(rA,rB)])
 end
@@ -203,7 +207,7 @@ println("-" ^ 70)
     sum(value(x_wind[r])  for r in 1:R),
     sum(value(x_bat[r])   for r in 1:R))
 
-# --- Plot capacity results par région (stacked bar chart) ---
+# --- Plot capacity results by region (stacked bar chart) ---
 fig_dir = joinpath(@__DIR__, "..", "..", "figures", "results")
 mkpath(fig_dir)
 regions_plot = collect(regions)

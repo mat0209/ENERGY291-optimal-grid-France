@@ -1,3 +1,8 @@
+"""
+Fetch actual nuclear unit generation from the RTE Open Data API for representative days.
+Outputs production_nucleaire.csv to data/final/.
+"""
+
 import requests, base64, time, pandas as pd
 
 CLIENT_ID     = "a8ecdc57-12c0-4a28-9df9-04dbf26bd266"
@@ -28,16 +33,16 @@ units = {
 }
 
 dates = [
-    ("2024-01-18T00:00:00+01:00", "2024-01-19T00:00:00+01:00"),  # hiver CET
-    ("2024-02-04T00:00:00+01:00", "2024-02-05T00:00:00+01:00"),  # hiver CET
-    ("2024-03-12T00:00:00+01:00", "2024-03-13T00:00:00+01:00"),  # hiver CET (avant passage heure été le 31/03)
-    ("2024-06-12T00:00:00+02:00", "2024-06-13T00:00:00+02:00"),  # été CEST
-    ("2024-06-22T00:00:00+02:00", "2024-06-23T00:00:00+02:00"),  # été CEST
-    ("2024-08-13T00:00:00+02:00", "2024-08-14T00:00:00+02:00"),  # été CEST
-    ("2024-09-17T00:00:00+02:00", "2024-09-18T00:00:00+02:00"),  # été CEST
-    ("2024-10-04T00:00:00+02:00", "2024-10-05T00:00:00+02:00"),  # été CEST (avant passage heure hiver le 27/10)
-    ("2024-11-04T00:00:00+01:00", "2024-11-05T00:00:00+01:00"),  # hiver CET
-    ("2024-12-02T00:00:00+01:00", "2024-12-03T00:00:00+01:00"),  # hiver CET
+    ("2024-01-18T00:00:00+01:00", "2024-01-19T00:00:00+01:00"),  # winter CET
+    ("2024-02-04T00:00:00+01:00", "2024-02-05T00:00:00+01:00"),  # winter CET
+    ("2024-03-12T00:00:00+01:00", "2024-03-13T00:00:00+01:00"),  # winter CET (before DST switch on 31/03)
+    ("2024-06-12T00:00:00+02:00", "2024-06-13T00:00:00+02:00"),  # summer CEST
+    ("2024-06-22T00:00:00+02:00", "2024-06-23T00:00:00+02:00"),  # summer CEST
+    ("2024-08-13T00:00:00+02:00", "2024-08-14T00:00:00+02:00"),  # summer CEST
+    ("2024-09-17T00:00:00+02:00", "2024-09-18T00:00:00+02:00"),  # summer CEST
+    ("2024-10-04T00:00:00+02:00", "2024-10-05T00:00:00+02:00"),  # summer CEST (before DST switch on 27/10)
+    ("2024-11-04T00:00:00+01:00", "2024-11-05T00:00:00+01:00"),  # winter CET
+    ("2024-12-02T00:00:00+01:00", "2024-12-03T00:00:00+01:00"),  # winter CET
 ]
 
 BASE_URL = "https://digital.iservices.rte-france.com/open_api/actual_generation/v1/actual_generations_per_unit"
@@ -59,5 +64,5 @@ for start, end in dates:
 
 df = pd.DataFrame(all_rows)
 df.to_csv("production_nucleaire.csv", index=False)
-print(f"✅ {len(df)} lignes exportées")
+print(f"✅ {len(df)} rows exported")
 print(df.head())

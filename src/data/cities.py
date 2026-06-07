@@ -1,3 +1,9 @@
+"""
+Match RTE substation names to French communes and assign each to an administrative region.
+Uses manual mapping, commune lookup, and neighbor inference for unmatched nodes.
+Reads lignes_transmission.csv; outputs an enriched version with region columns.
+"""
+
 import pandas as pd
 import unicodedata
 import re
@@ -22,7 +28,7 @@ _ARTICLE_RE = re.compile(r"^(.*?)\s+\((L[AE]?|LES)\s*\)$", re.IGNORECASE)
 
 def rte_normalize(nom: str) -> str:
     nom = nom.strip()
-    # Move trailing article: "ALOUETTES (LES)" → "LES ALOUETTES"
+    # Move trailing article: "ALOUETTES (LES)" → "LES ALOUETTES" (French article inversion)
     m = _ARTICLE_RE.match(nom)
     if m:
         nom = f"{m.group(2).strip()} {m.group(1).strip()}"
@@ -187,7 +193,7 @@ MANUAL: dict[str, tuple] = {
     # ── Île-de-France (overrides communes in Occitanie / other regions) ──
     "PLAISANCE":            _m(_IDF, 48.84,  2.39),   # substation in Paris 14e (not Plaisance-du-Touch/OCC)
     # ── Grand Est / IDF border ────────────────────────────────────────────
-    "FOSSES (LES)":         _m(_IDF, 49.10,  2.52),   # Fosses, Val-d'Oise (connexions Barbuise/GES et Orsonville/IDF)
+    "FOSSES (LES)":         _m(_IDF, 49.10,  2.52),   # Fosses, Val-d'Oise (connections to Barbuise/GES and Orsonville/IDF)
     # ── Provence-Alpes-Côte d'Azur (communes matched to PDL) ─────────────
     "TRANS":                _m(_PAC, 43.48,  6.48),   # Trans-en-Provence, Var
     "VINS":                 _m(_PAC, 43.41,  6.20),   # Vins-sur-Caramy, Var
@@ -232,12 +238,12 @@ MANUAL: dict[str, tuple] = {
     "ARRIGHI":              _m(_COR, 42.07,  9.02),
     "LAPARAN":              _m(_COR, 41.85,  9.08),
     "LUCCIANA":             _m(_COR, 42.52,  9.41),
-    # ── Normandie (suite) ─────────────────────────────────────────────────
+    # ── Normandie (cont.) ─────────────────────────────────────────────────
     "PENLY (POSTE EVACUATION)": _m(_NOR, 49.98,  1.21),
     "PENLY (POSTE CENTRALE)":   _m(_NOR, 49.98,  1.21),
     "TAUTE":                    _m(_NOR, 49.27, -1.28),   # near Saint-Lô, Manche
-    "GREPILLES":                _m(_ARA, 44.87,  5.02),   # Isère (near Grenoble) – connexions ARA
-    # ── Grand Est (suite) ─────────────────────────────────────────────────
+    "GREPILLES":                _m(_ARA, 44.87,  5.02),   # Isère (near Grenoble) – connections to ARA
+    # ── Grand Est (cont.) ─────────────────────────────────────────────────
     "CHOOZ B":                  _m(_GES, 50.09,  4.79),   # Chooz NPP, Ardennes
     "MOULAINE":                 _m(_GES, 49.50,  5.77),   # Meurthe-et-Moselle
     "BOCTOIS":                  _m(_GES, 48.27,  4.12),
@@ -256,9 +262,9 @@ MANUAL: dict[str, tuple] = {
     "THIERS":                   _m(_HDF, 50.39,  3.51),   # substation in Nord (Valenciennes area) – not the Puy-de-Dôme city
     # ── Nouvelle-Aquitaine: communes matched to ARA in error ──────────────
     "BEAULIEU":                 _m(_NAQ, 44.98,  1.83),   # Beaulieu-sur-Dordogne, Corrèze (19)
-    "CHASTANG 1":               _m(_NAQ, 45.20,  2.10),   # Barrage de Chastang, Corrèze (19)
-    "CHASTANG (LE)":            _m(_NAQ, 45.20,  2.10),   # idem
-    "SIRMIERE":                 _m(_NAQ, 46.00,  1.00),   # near border PDL/NAQ; connexions BEAULIEU/MERLATIERE
+    "CHASTANG 1":               _m(_NAQ, 45.20,  2.10),   # Chastang Dam, Corrèze (19)
+    "CHASTANG (LE)":            _m(_NAQ, 45.20,  2.10),   # same
+    "SIRMIERE":                 _m(_NAQ, 46.00,  1.00),   # near border PDL/NAQ; connections to BEAULIEU/MERLATIERE
     # ── Auvergne-Rhône-Alpes: communes matched to NAQ in error ────────────
     "ST-VALLIER":               _m(_ARA, 45.17,  4.82),   # Saint-Vallier, Drôme (26)
     "PRATCLAUX":                _m(_ARA, 44.97,  3.85),   # Haute-Loire (43)
@@ -266,8 +272,8 @@ MANUAL: dict[str, tuple] = {
     # ── Pays de la Loire: communes matched to ARA/BFC in error ───────────
     "ST-JOSEPH":                _m(_PDL, 47.27, -1.44),   # near Nantes, Loire-Atlantique (44)
     "ST-BARTHELEMY":            _m(_PDL, 47.29, -1.50),   # near Nantes area
-    "RECOUVRANCE":              _m(_PDL, 47.22, -1.57),   # near Nantes; connexions CHEVIRE/CHOLET/MERLATIERE
-    # ── Hauts-de-France (suite) ────────────────────────────────────────────
+    "RECOUVRANCE":              _m(_PDL, 47.22, -1.57),   # near Nantes; connections to CHEVIRE/CHOLET/MERLATIERE
+    # ── Hauts-de-France (cont.) ────────────────────────────────────────────
     "WARANDE":                  _m(_HDF, 50.95,  2.19),   # near Bourbourg, Nord
     "CRECHETS (LES)":           _m(_HDF, 50.55,  2.68),   # near Lestrem/Weppes, Pas-de-Calais
     "ST-BRICE":                 _m(_HDF, 49.52,  3.60),   # near Ormes/Aisne, connected to HDF substations
@@ -275,7 +281,7 @@ MANUAL: dict[str, tuple] = {
     "COQUEREL":                 _m(_HDF, 50.05,  2.20),   # near Limeux, Somme (80)
     "DUNES (LES)":              _m(_HDF, 51.02,  2.49),   # near Grande-Synthe/Dunkerque, Nord
     "VERTEFEUILLE":             _m(_HDF, 50.47,  2.35),   # near Weppes/Pas-de-Calais, Nord
-    # ── Auvergne-Rhône-Alpes (suite) ───────────────────────────────────────
+    # ── Auvergne-Rhône-Alpes (cont.) ───────────────────────────────────────
     "MOUCHE (LA)":              _m(_ARA, 45.71,  4.83),   # La Mouche, Oullins/Lyon area (Rhône, 69)
     "BELLE-ETOILE":             _m(_ARA, 45.71,  4.92),   # near Oullins, Rhône (Saint-Priest area)
     "BEC (LE)":                 _m(_ARA, 45.65,  4.87),   # Le Bec near Lyon (connected to Soleil/Oullins cluster)
@@ -289,7 +295,7 @@ MANUAL: dict[str, tuple] = {
     "RANDENS":                  _m(_ARA, 45.51,  6.38),   # Savoie
     "TOURS EN SAVOIE":          _m(_ARA, 45.56,  6.47),
     "HERMILLON":                _m(_ARA, 45.33,  6.46),   # Savoie
-    # ── Provence-Alpes-Côte d'Azur (suite) ─────────────────────────────────
+    # ── Provence-Alpes-Côte d'Azur (cont.) ─────────────────────────────────
     "BOUTRE":                   _m(_PAC, 43.73,  6.12),   # Var hydro
     "LA GAUDIERE":              _m(_PAC, 43.49,  5.45),   # near Aix-en-Provence
     "GAUDIERE (LA)":            _m(_PAC, 43.49,  5.45),
@@ -307,18 +313,18 @@ MANUAL: dict[str, tuple] = {
     "CHAPELLE (LA) (CHAPELLE D ARBLAY)": _m(_NOR, 49.67,  1.27),  # La Chapelle-d'Arblay, Seine-Maritime (76)
     # ── Nouvelle-Aquitaine (Corrèze hydro cluster, matched to PAC in error) ──
     "MOLE (LA)":                _m(_NAQ, 45.33,  2.05),   # near Bort-les-Orgues, Corrèze (19)
-    "ST-PIERRE-MAREGES":        _m(_NAQ, 45.32,  2.08),   # Barrage de Marèges, Corrèze (19)
+    "ST-PIERRE-MAREGES":        _m(_NAQ, 45.32,  2.08),   # Marèges Dam, Corrèze (19)
     "BORT":                     _m(_NAQ, 45.39,  2.49),   # Bort-les-Orgues, Corrèze (19)
-    # ── Normandie (substations inférées à tort en NAQ) ────────────────────
-    "BARNABOS":                 _m(_NOR, 49.52,  0.97),   # poste RTE Seine-Maritime (toutes connexions vers Paluel/Rougemontier)
-    "REMISE":                   _m(_NOR, 49.55,  0.65),   # poste RTE near Fécamp; connexions Barnabos/Terrier/Patis
+    # ── Normandie (substations wrongly assigned to NAQ) ──────────────────
+    "BARNABOS":                 _m(_NOR, 49.52,  0.97),   # RTE substation Seine-Maritime (all connections to Paluel/Rougemontier)
+    "REMISE":                   _m(_NOR, 49.55,  0.65),   # RTE substation near Fécamp; connections to Barnabos/Terrier/Patis
     # ── Overrides: commune ambiguity fixes (wrong region via automatic match) ──
-    # Substations near Paris matched to wrong commune (same name, different région)
+    # Substations near Paris matched to wrong commune (same name, different region)
     "MASSY":                    _m(_IDF, 48.73,  2.27),   # Essonne, near Orly (not NOR)
     "CHEVILLY":                 _m(_IDF, 48.77,  2.34),   # Chevilly-Larue, Val-de-Marne (not CVL)
     "CHATILLON (CLAMART)":      _m(_IDF, 48.80,  2.27),   # Châtillon, Hauts-de-Seine (not ARA)
     "MONTJAY":                  _m(_IDF, 48.88,  2.72),   # Montjay-la-Tour, Seine-et-Marne (not PAC)
-    "LIESSE":                   _m(_IDF, 49.05,  3.62),   # actually Aisne → HDF (connexions IDF = border)
+    "LIESSE":                   _m(_IDF, 49.05,  3.62),   # actually Aisne → HDF (IDF connections = border)
     "GOUVIEUX":                 _m(_IDF, 49.18,  2.42),   # Oise, near Chantilly (not HDF strictly)
     "NEMOURS":                  _m(_CVL, 48.27,  2.69),   # Seine-et-Marne... but actually IDF
     "GRISOLLES":                _m(_OCC, 43.99,  1.31),   # Tarn-et-Garonne (not HDF)
@@ -338,19 +344,19 @@ MANUAL: dict[str, tuple] = {
     "VALENCE":                  _m(_ARA, 44.93,  4.90),   # Drôme (not Charente/NAQ)
     "TARASCON":                 _m(_OCC, 42.85,  1.60),   # Tarascon-sur-Ariège (not PAC)
     "ST JOSEPH":                _m(_PDL, 47.27, -1.44),   # near Nantes, Loire-Atlantique (not ARA)
-    # ── Occitanie (suite) ──────────────────────────────────────────────────
+    # ── Occitanie (cont.) ──────────────────────────────────────────────────
     "HOSPITALET (L)":           _m(_OCC, 42.59,  1.80),   # L'Hospitalet-près-l'Andorre, Ariège
     "REQUISTA -TREBAS":         _m(_OCC, 44.01,  2.54),   # Aveyron
     "CROUX":                    _m(_OCC, 44.04,  2.52),   # near Réquista, Aveyron
-    # ── Auvergne-Rhône-Alpes (suite) ───────────────────────────────────────
+    # ── Auvergne-Rhône-Alpes (cont.) ───────────────────────────────────────
     "CORDEAC":                  _m(_ARA, 44.86,  5.73),   # Isère, Drac valley
     "SAUTET (LE)":              _m(_ARA, 44.83,  5.74),   # Isère, Drac valley hydro
     "PONT-ESCOFFIER":           _m(_ARA, 44.80,  4.62),   # Ardèche
     "ST-GUILLERME":             _m(_ARA, 44.79,  4.63),   # Ardèche
-    # ── Provence-Alpes-Côte d'Azur (suite) ─────────────────────────────────
+    # ── Provence-Alpes-Côte d'Azur (cont.) ─────────────────────────────────
     "SERRE-PONCON":             _m(_PAC, 44.53,  6.31),   # Hautes-Alpes hydro reservoir
     "ARGENTIERE (L)":           _m(_PAC, 44.79,  6.55),   # L'Argentière-la-Bessée, Hautes-Alpes
-    # ── Étranger ──────────────────────────────────────────────────────────
+    # ── Foreign ───────────────────────────────────────────────────────────
     "ACHENE":               _m(_EXT, None, None),
     "AUBANGE":              _m(_EXT, None, None),
     "AVELGEM":              _m(_EXT, None, None),
@@ -438,7 +444,7 @@ for iteration in range(10):
     newly = {}
     for name in list(still_unmatched):
         rows = df[(df["Ville_Depart"] == name) | (df["Ville_Arrivee"] == name)]
-        # Collect neighbor regions (exclude Étranger — don't propagate from foreign)
+        # Collect neighbor regions (exclude foreign nodes — don't propagate from them)
         neighbor_regs = []
         for _, r in rows.iterrows():
             other_reg  = r["Reg_Arrivee"]  if r["Ville_Depart"]  == name else r["Reg_Depart"]
@@ -466,12 +472,12 @@ print(f"Matched (total):   {len(matched)}/{n} ({100*len(matched)/n:.1f}%)")
 print(f"Unmatched final:   {len(still_unmatched)}")
 
 both_matched = df["Reg_Depart_Code"].notna() & df["Reg_Arrivee_Code"].notna()
-print(f"Tronçons matchés:  {both_matched.sum()}/{len(df)} ({100*both_matched.mean():.1f}%)")
+print(f"Matched segments:  {both_matched.sum()}/{len(df)} ({100*both_matched.mean():.1f}%)")
 
 df.to_csv(TRANSMISSION_OUT, index=False)
 print(f"Saved -> {TRANSMISSION_OUT}")
 
 if still_unmatched:
-    print("\nNoms non matchés après inférence:")
+    print("\nUnmatched names after inference:")
     for u in sorted(still_unmatched):
         print(f"  {u!r}")

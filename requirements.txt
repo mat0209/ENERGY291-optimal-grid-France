@@ -1,7 +1,5 @@
 numpy
 pandas
-scipy
 matplotlib
-scikit-learn
-pyyaml
+plotly
 requests

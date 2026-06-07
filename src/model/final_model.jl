@@ -1,3 +1,7 @@
+# Final capacity expansion model: seasonal battery (Kotzur), endogenous transmission, +8% demand.
+# Minimises annualised CAPEX for solar, wind, batteries and new transmission lines (HiGHS MILP).
+# Inputs: data/final/; Output: data/results/ and figures/results/.
+
 using JuMP, CSV, DataFrames, Printf, Dates, Plots, HiGHS
 
 # =============================================================================
@@ -30,7 +34,7 @@ T = 24                # hours per day
 region_idx = Dict(r => i for (i, r) in enumerate(regions))
 date_idx   = Dict(string(d) => i for (i, d) in enumerate(dates))
 
-# Capacités interrégionales : (rA, rB) => cap_MW  (une seule direction par paire du CSV)
+# Interregional capacities: (rA, rB) => cap_MW (one direction per CSV pair)
 cap = Dict(
     (region_idx[row.Region_A], region_idx[row.Region_B]) => Float64(row.Capacite_MW_total)
     for row in eachrow(cap_df)
@@ -43,7 +47,7 @@ dist = Dict(
 )
 pairs = collect(keys(cap))
 
-# Pour chaque région : paires dont elle est l'extrémité import (in) ou export (out)
+# For each region: pairs where it is the import (in) or export (out) endpoint
 pairs_in  = [[(rA,rB) for (rA,rB) in pairs if rB == r] for r in 1:R]
 pairs_out = [[(rA,rB) for (rA,rB) in pairs if rA == r] for r in 1:R]
 
@@ -64,7 +68,7 @@ for row in eachrow(gen_df)
     gen_reduced[r, d, t] = coalesce(row.gen_reduced_MW, 0.0)
 end
 
-demand .*= 1.08  # scénario +8% de consommation
+demand .*= 1.08  # +8% demand growth scenario
 
 # --- Capacity factors (Ninja timestamps are UTC, matched by date and UTC hour) ---
 for i in 1:nrow(pv_df)
@@ -90,7 +94,7 @@ sort!(cluster_df, :actual_date)
 N = nrow(cluster_df)   # 366 actual days
 
 # For each actual day i (1:N) in chronological order: index of its typical day (1:D)
-# This ordering is what enables seasonal storage: e_inter follows the actual calendar
+# This ordering enables seasonal storage: e_inter follows the actual calendar
 day_to_typday = [date_idx[string(row.representative_date)] for row in eachrow(cluster_df)]
 
 # Number of actual days assigned to each typical day
@@ -108,35 +112,35 @@ c_bat       = 25529.34076   # €/MWh/yr    — 4-hour Li-ion battery (energy ca
 c_trans_400 = 61.09615194   # €/MW/km/yr  — 400 kV transmission lines (annualized)
 c_trans_225 = 101.8269199   # €/MW/km/yr  — 225 kV transmission lines (annualized)
 
-cap_trans_400 = 1500.0  # MW, capacité maximale par ligne de transmission 400 kV
-cap_trans_225 = 400.0   # MW, capacité maximale par ligne de transmission 225 kV
+cap_trans_400 = 1500.0  # MW per 400 kV transmission line
+cap_trans_225 = 400.0   # MW per 225 kV transmission line
 
-#println("Vérification gen_reduced vs demand :")
+#println("Checking gen_reduced vs demand:")
 #for d in 1:D
- #   gen_tot = sum(gen_reduced[r, d, t] for r in 1:R, t in 1:T)
- #   dem_tot = sum(demand[r, d, t]      for r in 1:R, t in 1:T)
- #   cf_wind_tot  = sum(cf_wind[r, d, t]  for r in 1:R, t in 1:T)
- #   cf_solar_tot = sum(cf_solar[r, d, t] for r in 1:R, t in 1:T)
- #   @printf("Jour %2d : gen_reduced=%.0f MWh  demand=%.0f MWh  ratio=%.2f  cf_wind=%.1f  cf_solar=%.1f\n",
- #           d, gen_tot, dem_tot, gen_tot/dem_tot, cf_wind_tot, cf_solar_tot)
+#    gen_tot = sum(gen_reduced[r, d, t] for r in 1:R, t in 1:T)
+#    dem_tot = sum(demand[r, d, t]      for r in 1:R, t in 1:T)
+#    cf_wind_tot  = sum(cf_wind[r, d, t]  for r in 1:R, t in 1:T)
+#    cf_solar_tot = sum(cf_solar[r, d, t] for r in 1:R, t in 1:T)
+#    @printf("Day %2d : gen_reduced=%.0f MWh  demand=%.0f MWh  ratio=%.2f  cf_wind=%.1f  cf_solar=%.1f\n",
+#            d, gen_tot, dem_tot, gen_tot/dem_tot, cf_wind_tot, cf_solar_tot)
 #end
 
 
-#println("\nConnectivité des régions :")
+#println("\nRegion connectivity:")
 #for r in 1:R
 #    max_in  = sum(cap[p] for p in pairs_in[r];  init=0.0)
 #    max_out = sum(cap[p] for p in pairs_out[r]; init=0.0)
-#    @printf("%-35s  import_max=%7.0f MW  export_max=%7.0f MW\n",
+#    @printf("%-35s  max_import=%7.0f MW  max_export=%7.0f MW\n",
 #            regions[r], max_in, max_out)
 #end
 
-#println("\nHeure la plus critique par région :")
+#println("\nMost critical hour by region:")
 #for r in 1:R
 #    max_in = sum(cap[p] for p in pairs_in[r]; init=0.0)
 #    worst = minimum(gen_reduced[r,d,t] + max_in
 #                    for d in 1:D, t in 1:T)
 #    worst_demand = maximum(demand[r,d,t] for d in 1:D, t in 1:T)
-#    @printf("%-35s  offre_min=%.0f MW  demande_max=%.0f MW\n",
+#    @printf("%-35s  min_supply=%.0f MW  max_demand=%.0f MW\n",
 #            regions[r], worst, worst_demand)
 #end
 
@@ -151,8 +155,8 @@ set_silent(model)
 @variable(model, x_solar[1:R] >= 0)                     # new solar capacity    [MW]
 @variable(model, x_wind[1:R]  >= 0)                     # new wind capacity     [MW]
 @variable(model, x_bat[1:R]   >= 0)                     # new battery capacity  [MWh]
-@variable(model, y_trans_400[pairs] >= 0, Int)           # new 400 kV transmission capacity
-@variable(model, y_trans_225[pairs] >= 0, Int)           # new 225 kV transmission capacity
+@variable(model, y_trans_400[pairs] >= 0, Int)           # new 400 kV transmission lines
+@variable(model, y_trans_225[pairs] >= 0, Int)           # new 225 kV transmission lines
 
 @variable(model, b_charge[1:R, 1:D, 1:T]    >= 0)  # battery charging         [MW]
 @variable(model, b_discharge[1:R, 1:D, 1:T] >= 0)  # battery discharging      [MW]
@@ -167,7 +171,7 @@ set_silent(model)
 
 # --- Objective: minimise total annualised investment cost ---
 @objective(model, Min,
-    sum(c_solar * x_solar[r] + c_wind * x_wind[r] + c_bat * x_bat[r] 
+    sum(c_solar * x_solar[r] + c_wind * x_wind[r] + c_bat * x_bat[r]
     for r in 1:R)
     + sum(y_trans_400[p] * c_trans_400 * dist[p] * cap_trans_400
     + y_trans_225[p] * c_trans_225 * dist[p] * cap_trans_225 for p in pairs)
@@ -225,7 +229,7 @@ for r in 1:R, i in 1:N
     @constraint(model, e_inter[r, i] + e_intra_min[r, d] >= 0)
 end
 
-# (2) Capacités de transmission interrégionales
+# (2) Interregional transmission capacities
 for (rA, rB) in pairs
     cap_new = cap[(rA,rB)] + y_trans_400[(rA,rB)] * cap_trans_400 + y_trans_225[(rA,rB)] * cap_trans_225
     for d in 1:D, t in 1:T
@@ -265,9 +269,9 @@ println("-" ^ 70)
     sum(value(x_bat[r])   for r in 1:R))
 
 println()
-println("=== Nouvelles lignes de transmission ===")
+println("=== New transmission lines ===")
 @printf("%-35s %-35s %10s %10s %12s %12s\n",
-    "Région A", "Région B", "400kV(nb)", "225kV(nb)", "Cap400(MW)", "Cap225(MW)")
+    "Region A", "Region B", "400kV(nb)", "225kV(nb)", "Cap400(MW)", "Cap225(MW)")
 println("-" ^ 90)
 region_name = Dict(v => k for (k, v) in region_idx)
 trans_built = false
@@ -282,10 +286,10 @@ for p in sort(pairs)
         trans_built = true
     end
 end
-trans_built || println("  Aucune nouvelle ligne construite.")
+trans_built || println("  No new lines built.")
 println("-" ^ 90)
 
-# --- Plot capacity results par région (stacked bar chart) ---
+# --- Plot capacity results by region (stacked bar chart) ---
 fig_dir = joinpath(@__DIR__, "..", "..", "figures", "results")
 mkpath(fig_dir)
 regions_plot = collect(regions)

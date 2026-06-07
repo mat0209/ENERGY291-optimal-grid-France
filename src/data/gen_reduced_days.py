@@ -1,3 +1,8 @@
+"""
+Compute reduced generation per region by subtracting selected nuclear output from total generation.
+Merges eco2mix regional data with nuclear unit production; outputs gen_reduced_days.csv to data/final/.
+"""
+
 import pandas as pd
 from pathlib import Path
 
