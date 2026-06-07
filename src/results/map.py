@@ -216,7 +216,7 @@ if not bat_regions.empty:
         b_lats.append(centroids.loc[region, "latitude_centre"]  - 0.30)
         b_sizes.append(MARKER_SIZE)
         b_hover.append(
-            f"<b>Battery — {ABBREV.get(region, region)}</b><br>"
+            f"<b>4h Battery — {ABBREV.get(region, region)}</b><br>"
             f"New capacity: {row['Battery_MWh']:,.0f} MWh"
         )
     fig.add_trace(go.Scattergeo(
@@ -231,7 +231,7 @@ if not bat_regions.empty:
         ),
         hoverinfo="text",
         hovertext=b_hover,
-        name="Battery (new capacity)",
+        name="4h Battery (new capacity)",
         showlegend=True,
     ))
 
@@ -245,7 +245,7 @@ for region, row in cap.iterrows():
     if row["Wind_MW"] > 0:
         pairs.append((lon0 + 0.65, lat0 - 0.65, f"<b>{row['Wind_MW']/1000:.1f} GW</b>"))
     if row["Battery_MWh"] > 0:
-        pairs.append((lon0 - 0.65, lat0 - 0.65, f"<b>{row['Battery_MWh']/1000:.0f} GWh</b>"))
+        pairs.append((lon0 - 0.65, lat0 - 0.65, f"<b>{row['Battery_MWh']/4000:.0f} GW</b>"))
     for alon, alat, label in pairs:
         fig.add_trace(go.Scattergeo(
             lon=[alon], lat=[alat],
