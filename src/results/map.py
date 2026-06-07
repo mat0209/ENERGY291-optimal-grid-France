@@ -223,7 +223,7 @@ if not bat_regions.empty:
         lon=b_lons, lat=b_lats,
         mode="markers",
         marker=dict(
-            symbol="square",
+            symbol="hexagon",
             size=b_sizes,
             color="#e07b27",
             opacity=0.90,
