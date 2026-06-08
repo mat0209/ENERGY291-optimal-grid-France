@@ -10,8 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FINAL = ROOT / "data" / "final"
-FIG = ROOT / "figures"
-FIG.mkdir(exist_ok=True)
+FIG = ROOT / "figures" / "gen representative days"
+FIG.mkdir(parents=True, exist_ok=True)
 
 # ── Load data ──────────────────────────────────────────────────────────────────
 gen = pd.read_csv(FINAL / "gen_reduced_days.csv", sep=";")
@@ -143,5 +143,89 @@ plt.tight_layout(rect=[0, 0.05, 1, 1])
 fig.savefig(FIG / "national_consumption_gen_reduced.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
 print("Saved national_consumption_gen_reduced.png")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Plot 3 — National generation mix with decommissioned nuclear + consumption line
+# ══════════════════════════════════════════════════════════════════════════════
+nat_v2_cols = [
+    "nuclear_gen_reduced_MW", "Hydraulique (MW)", "Thermique (MW)",
+    "Eolien terrestre", "Eolien offshore", "Solaire (MW)", "Bioénergies (MW)",
+    "Pompage (MW)", "nuclear_selected_MW", "Consommation (MW)",
+]
+nat_v2 = (
+    gen.groupby(["Date", "hour"])[[c for c in nat_v2_cols if c in gen.columns]]
+    .sum()
+    .reset_index()
+)
+
+GEN_SOURCES_V2 = {
+    "nuclear_gen_reduced_MW":  "Nuclear",
+    "Hydraulique (MW)":        "Hydro",
+    "Thermique (MW)":          "Thermal",
+    "Eolien terrestre":        "Wind onshore",
+    "Eolien offshore":         "Wind offshore",
+    "Solaire (MW)":            "Solar",
+    "Bioénergies (MW)":        "Bioenergy",
+    "Pompage (MW)":            "Pumping",
+    "nuclear_selected_MW":     "Nuclear (decommissioned)",
+}
+
+SOURCE_COLORS_V2 = {
+    "Nuclear":                  "#4e79a7",
+    "Hydro":                    "#76b7b2",
+    "Thermal":                  "#e15759",
+    "Wind onshore":             "#59a14f",
+    "Wind offshore":            "#8cd17d",
+    "Solar":                    "#f28e2b",
+    "Bioenergy":                "#b07aa1",
+    "Pumping":                  "#9c755f",
+    "Nuclear (decommissioned)": "#4e79a7",  # same blue, distinguished by hatching
+}
+
+fig, axes = plt.subplots(2, 5, figsize=(20, 8), sharey=False)
+axes = axes.flatten()
+fig.suptitle("National generation mix — decommissioned nuclear units highlighted",
+             fontsize=14, fontweight="bold")
+
+for ax, date in zip(axes, dates):
+    ddf = nat_v2[nat_v2["Date"] == date].sort_values("hour")
+    hours = ddf["hour"].values
+    bottom = None
+
+    for col, label in GEN_SOURCES_V2.items():
+        if col not in ddf.columns:
+            continue
+        vals = pd.to_numeric(ddf[col], errors="coerce").fillna(0).clip(lower=0).values
+        hatch = "///" if label == "Nuclear (decommissioned)" else None
+        edgecolor = "white" if hatch is None else "#2c4a6e"
+        if bottom is None:
+            ax.bar(hours, vals, label=label, color=SOURCE_COLORS_V2[label],
+                   hatch=hatch, edgecolor=edgecolor, linewidth=0.4, width=0.85)
+            bottom = vals.copy()
+        else:
+            ax.bar(hours, vals, bottom=bottom, label=label, color=SOURCE_COLORS_V2[label],
+                   hatch=hatch, edgecolor=edgecolor, linewidth=0.4, width=0.85)
+            bottom += vals
+
+    # Consumption lines
+    cons = pd.to_numeric(ddf["Consommation (MW)"], errors="coerce").fillna(0)
+    ax.plot(hours, cons, color="black", linewidth=1.8, linestyle="-",
+            label="Consumption", zorder=5)
+    ax.plot(hours, cons * 1.08, color="black", linewidth=1.2, linestyle="--",
+            label="Consumption +8%", zorder=5)
+
+    ax.set_title(f"{MONTH_LABEL.get(date, date)}\n{date}", fontsize=9)
+    ax.set_xlabel("Hour", fontsize=7)
+    ax.set_ylabel("MW", fontsize=7)
+    ax.tick_params(labelsize=7)
+    ax.set_xticks(range(0, 24, 4))
+
+handles, labels_leg = axes[0].get_legend_handles_labels()
+fig.legend(handles, labels_leg, loc="lower center", ncol=len(GEN_SOURCES_V2) + 2,
+           fontsize=8, frameon=False, bbox_to_anchor=(0.5, -0.02))
+plt.tight_layout(rect=[0, 0.05, 1, 1])
+fig.savefig(FIG / "national_gen_mix_v2.png", dpi=150, bbox_inches="tight")
+plt.close(fig)
+print("Saved national_gen_mix_v2.png")
 
 print(f"\nAll figures saved to {FIG}")
