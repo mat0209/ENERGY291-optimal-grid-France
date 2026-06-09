@@ -1,4 +1,4 @@
-# Final capacity expansion model: seasonal battery (Kotzur), endogenous transmission, +8% demand.
+# Final capacity expansion model: seasonal battery (Kotzur), transmission, +8% demand.
 # Minimises annualised CAPEX for solar, wind, batteries and new transmission lines (HiGHS MILP).
 # Inputs: data/final/; Output: data/results/ and figures/results/.
 
@@ -54,6 +54,7 @@ pairs_out = [[(rA,rB) for (rA,rB) in pairs if rA == r] for r in 1:R]
 # =============================================================================
 # Parameters — arrays indexed [r, d, t], t ∈ 1:24
 # =============================================================================
+
 demand      = zeros(R, D, T)   # D_{r,d,t}  [MW]
 gen_reduced = zeros(R, D, T)   # G̃_{r,d,t}  [MW]
 cf_solar    = zeros(R, D, T)   # CF^solar_{r,d,t}  ∈ [0,1]
@@ -115,36 +116,6 @@ c_trans_225 = 101.8269199   # €/MW/km/yr  — 225 kV transmission lines (annua
 cap_trans_400 = 1500.0  # MW per 400 kV transmission line
 cap_trans_225 = 400.0   # MW per 225 kV transmission line
 
-#println("Checking gen_reduced vs demand:")
-#for d in 1:D
-#    gen_tot = sum(gen_reduced[r, d, t] for r in 1:R, t in 1:T)
-#    dem_tot = sum(demand[r, d, t]      for r in 1:R, t in 1:T)
-#    cf_wind_tot  = sum(cf_wind[r, d, t]  for r in 1:R, t in 1:T)
-#    cf_solar_tot = sum(cf_solar[r, d, t] for r in 1:R, t in 1:T)
-#    @printf("Day %2d : gen_reduced=%.0f MWh  demand=%.0f MWh  ratio=%.2f  cf_wind=%.1f  cf_solar=%.1f\n",
-#            d, gen_tot, dem_tot, gen_tot/dem_tot, cf_wind_tot, cf_solar_tot)
-#end
-
-
-#println("\nRegion connectivity:")
-#for r in 1:R
-#    max_in  = sum(cap[p] for p in pairs_in[r];  init=0.0)
-#    max_out = sum(cap[p] for p in pairs_out[r]; init=0.0)
-#    @printf("%-35s  max_import=%7.0f MW  max_export=%7.0f MW\n",
-#            regions[r], max_in, max_out)
-#end
-
-#println("\nMost critical hour by region:")
-#for r in 1:R
-#    max_in = sum(cap[p] for p in pairs_in[r]; init=0.0)
-#    worst = minimum(gen_reduced[r,d,t] + max_in
-#                    for d in 1:D, t in 1:T)
-#    worst_demand = maximum(demand[r,d,t] for d in 1:D, t in 1:T)
-#    @printf("%-35s  min_supply=%.0f MW  max_demand=%.0f MW\n",
-#            regions[r], worst, worst_demand)
-#end
-
-
 # =============================================================================
 # Model
 # =============================================================================
@@ -165,8 +136,8 @@ set_silent(model)
 # --- Kotzur seasonal battery SOC (Kotzur et al. 2018) ---
 # SOC(r, i, t) = e_inter[r,i] + e_intra[r,f(i),t]
 @variable(model, e_intra[1:R, 1:D, 0:T])           # intra-period SOC, starts at 0, can be negative
-@variable(model, e_intra_max[1:R, 1:D])            # aux: max of e_intra over t per typical day
-@variable(model, e_intra_min[1:R, 1:D])            # aux: min of e_intra over t per typical day
+@variable(model, e_intra_max[1:R, 1:D])            # max of e_intra over t per typical day
+@variable(model, e_intra_min[1:R, 1:D])            # min of e_intra over t per typical day
 @variable(model, e_inter[1:R, 1:N] >= 0)           # inter-period SOC at start of each actual day
 
 # --- Objective: minimise total annualised investment cost ---
@@ -212,7 +183,7 @@ for r in 1:R, d in 1:D
     end
 end
 
-# (5) Cyclic annual condition: Σ_d cluster_size[d] × e_intra[r,d,T] = 0
+# (5) Cyclic annual condition:
 for r in 1:R
     @constraint(model, sum(cluster_size[d] * e_intra[r, d, T] for d in 1:D) == 0)
 end
@@ -237,7 +208,6 @@ for (rA, rB) in pairs
         @constraint(model, flow[(rA,rB), d, t] >= -cap_new)
     end
 end
-
 
 
 # =============================================================================

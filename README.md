@@ -28,7 +28,9 @@ We build a **grid-based capacity expansion model of the French power system** th
 - Endogenous transmission investment
 - Spatial allocation across 12 administrative regions
 
-The model is a MILP solved with HiGHS (via JuMP/Julia). It uses 10 representative days (k-medoids clustering), hourly demand and capacity factor data, and techno-economic cost assumptions.
+The model is a MILP solved with HiGHS (via JuMP/Julia). It uses 10 representative days selected by k-medoids clustering, hourly demand and capacity factor data, and techno-economic cost assumptions from RTE Futurs énergétiques 2050.
+
+**Battery storage** follows the Kotzur et al. (2018) seasonal decomposition: the state of charge is split into an intra-period component (reset to zero each typical day) and an inter-period component (carried forward across all 366 actual days in chronological order). This reduces capacity constraints by a factor of 24 compared to a naïve formulation. Reference: Kotzur L. et al. (2018), *A modeler's guide to handle complexity in energy systems optimization*, arXiv:1710.07593.
 
 ---
 
@@ -67,11 +69,13 @@ The model is a MILP solved with HiGHS (via JuMP/Julia). It uses 10 representativ
 
 ## Data Sources
 
-- RTE Eco2Mix (load & generation): https://www.rte-france.com
+- RTE Eco2Mix regional (load & generation by region): https://www.rte-france.com/eco2mix
+- RTE Open Data API (actual generation per nuclear unit): https://data.rte-france.com
+- RTE Futurs énergétiques 2050 (technology costs): https://www.rte-france.com
 - IAEA PRIS (nuclear fleet): https://pris.iaea.org
-- ODRE (grid data): https://odre.opendatasoft.com
-- Renewables.ninja (capacity factors): https://www.renewables.ninja
-- Copernicus Land Use: https://land.copernicus.eu
+- ODRE (transmission line data): https://odre.opendatasoft.com
+- Renewables.ninja (capacity factors PV & wind): https://www.renewables.ninja
+- IGN / data.gouv.fr (French communes & region centroids): https://www.data.gouv.fr
 
 ---
 
@@ -80,42 +84,42 @@ The model is a MILP solved with HiGHS (via JuMP/Julia). It uses 10 representativ
 ```text
 src/
   model/          → JuMP/Julia optimization models
-    final_model.jl                      → main model (+8% demand, endogenous tx)
-    model_with_fla.jl                   → Flamanville 3 variant
-    model_without_gas.jl                → no-gas variant
-    with_demand_growth.jl               → demand growth sweep
-    with_transmission_constraint.jl     → constrained transmission
+    final_model.jl                          → main model (+8% demand, endogenous tx, Kotzur battery)
+    battery_model.jl                        → standalone Kotzur battery model
+    model_with_fla.jl                       → Flamanville 3 variant
+    model_without_gas.jl                    → no-gas variant
+    with_demand_growth.jl                   → demand growth sweep
+    with_transmission_constraint.jl         → constrained transmission
     capacity_model_unlimited_transmission.jl
-    battery_model.jl
-    sensitivity_cost.jl                 → 5×5 wind/battery cost sweep
-    sensitivity_demand.jl               → demand growth sensitivity
-    comparison_4scenarios.jl            → cross-scenario comparison (Julia)
-    comparison_4scenarios.py            → cross-scenario comparison (Python)
-    map.py                              → geographic result map
+
+  results/        → post-processing and visualization
+    plotting_results.py                     → results charts
+    comparison_4scenarios.jl                → cross-scenario comparison (Julia)
+    comparison_4scenarios.py                → cross-scenario comparison (Python)
+    sensitivity_cost.jl                     → 5×5 wind/battery cost sweep
+    sensitivity_demand.jl                   → demand growth sensitivity
+    map.py                                  → geographic capacity map
 
   clustering/     → representative day selection
-    kmedoids.py / kmedoids_2.py
+    kmedoids.py / kmedoids_2.py / kmedoids_final.py
 
   data/           → data processing scripts
     rte_cleaning.py
-    gen_unit_nuclear.py
-    gen_reduced_days.py
-    filter_eco2mix_representative_days.py
-    filter_ninja_representative_days.py
+    gen_unit_nuclear.py                     → nuclear generation per unit via RTE API
+    gen_reduced_days.py                     → reduced-form dispatch per region × day
+    filter_eco2mix_representative_days.py   → filter Eco2Mix to 10 representative days
+    filter_ninja_representative_days.py     → filter Renewables.ninja to 10 representative days
     cleaning_solar_pv.py
     transmission.py
     regions.py
     cities.py
     plot_transmission.py
-    visualization.py
-
-  results/        → result processing and plotting
-    plotting_results.py
+    visualization.py                        → national mix and consumption plots
 
 data/
   raw/            → raw inputs (RTE, IAEA, ODRE, renewables.ninja)
   processed/      → intermediate outputs
-  final/          → production-ready inputs for the model
+  final/          → production-ready inputs for the model (hourly, 10 rep days)
   results/        → optimization outputs (CSV per scenario)
 
 figures/
@@ -124,7 +128,7 @@ figures/
   clustering/     → representative day clustering plots
   transmission/   → transmission network plots
 
-reports/          → project reports (PDF)
+reports/          → project reports and documentation
 ```
 
 ---
@@ -137,11 +141,17 @@ reports/          → project reports (PDF)
 # Run the final model
 julia src/model/final_model.jl
 
-# Run cost sensitivity sweep (5×5 grid)
-julia src/model/sensitivity_cost.jl
+# Run cost sensitivity sweep (5×5 wind × battery cost grid)
+julia src/results/sensitivity_cost.jl
 
 # Run demand growth sensitivity
-julia src/model/sensitivity_demand.jl
+julia src/results/sensitivity_demand.jl
+
+# Cross-scenario comparison
+julia src/results/comparison_4scenarios.jl
+
+# Geographic capacity map
+python src/results/map.py
 ```
 
 ---

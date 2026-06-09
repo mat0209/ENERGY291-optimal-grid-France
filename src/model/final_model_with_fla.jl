@@ -1,13 +1,13 @@
-# Comparison: Flamanville 3 avec gaz vs sans gaz.
-# Résout deux modèles (seule différence : thermique inclus ou exclu de gen_reduced).
-# Flamanville 3 présente dans les deux scénarios.
+# Comparison: Flamanville 3 with gas vs without gas.
+# Solves two models (only difference: thermal included or excluded from gen_reduced).
+# Flamanville 3 is present in both scenarios.
 #
-# Flamanville 3 (EPR, Normandie):
-#   - Puissance nominale : 1 630 MW  (EDF officiel)
-#   - Facteur de charge  : 75 %      (EPR neuf en 2030 > moyenne flotte 2024 ~67 %,
-#                                     source : RTE Bilan Électrique 2024, 361,7 TWh / 61,4 GW,
-#                                     https://analysesetdonnees.rte-france.com/bilan-electrique-2024/production)
-#   - Profil             : plat (baseload, non variable d'optimisation)
+# Flamanville 3 (EPR, Normandy):
+#   - Rated capacity : 1,630 MW  (EDF official)
+#   - Capacity factor: 75%       (new EPR in 2030 > 2024 fleet average ~67%,
+#                                  source: RTE Bilan Électrique 2024, 361.7 TWh / 61.4 GW,
+#                                  https://analysesetdonnees.rte-france.com/bilan-electrique-2024/production)
+#   - Profile        : flat (baseload, not an optimization variable)
 #
 # Inputs: data/final/; Output: data/results/ and figures/results/.
 
